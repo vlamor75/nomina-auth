@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { ReactNode, useState } from 'react';
 import { AppBar, Toolbar, IconButton, Typography, Drawer, List, ListItem, ListItemIcon, ListItemText, Box, Divider, Tooltip, useMediaQuery } from '@mui/material';
 import { useTheme, styled } from '@mui/material/styles';
 import { Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, Home as HomeIcon, Business as BusinessIcon, Person as PersonIcon, LocationCity as LocationCityIcon, Assignment as AssignmentIcon, MonetizationOn as MonetizationOnIcon, Description as DescriptionIcon, Logout as LogoutIcon } from '@mui/icons-material';
@@ -21,7 +21,11 @@ const Main = styled('main', { shouldForwardProp: (prop) => prop !== 'open' })<{ 
   overflow: 'hidden',
 }));
 
-const Dashboard = () => {
+interface DashboardLayoutProps {
+  children: ReactNode;
+}
+
+const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [open, setOpen] = useState(!isSmallScreen);
@@ -75,13 +79,7 @@ const Dashboard = () => {
               key={item.text}
               component={Link}
               to={item.path}
-              sx={{
-                cursor: 'pointer',
-                '&:hover': {
-                  backgroundColor: 'rgba(255,255,255,0.1)',
-                }
-              }}
-              onClick={() => isSmallScreen && setOpen(false)}
+              sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
             >
               <Tooltip title={!open ? item.text : ''} placement="right" arrow>
                 <ListItemIcon sx={{ color: 'white' }}>{item.icon}</ListItemIcon>
@@ -94,16 +92,7 @@ const Dashboard = () => {
         <ListItem
           component="button"
           onClick={handleLogout}
-          sx={{
-            cursor: 'pointer',
-            color: 'white',
-            backgroundColor: 'transparent',
-            '&:hover': {
-              backgroundColor: 'rgba(255,255,255,0.2)',
-            },
-            border: 'none',
-            marginTop: 2,
-          }}
+          sx={{ cursor: 'pointer', color: 'white', backgroundColor: 'transparent', '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' } }}
           aria-label="Cerrar sesión"
         >
           <ListItemIcon sx={{ color: 'white', fontSize: 28 }}><LogoutIcon /></ListItemIcon>
@@ -112,51 +101,10 @@ const Dashboard = () => {
       </Drawer>
 
       <Main open={open}>
-        <Box sx={{
-          backgroundColor: 'white',
-          padding: 3,
-          borderRadius: 2,
-          boxShadow: 2,
-          maxWidth: '1000px',
-          margin: '20px auto',
-        }}>
-          <Typography variant="h4" sx={{ marginBottom: 2, textAlign: 'left' }}>
-            Bienvenido al Dashboard
-          </Typography>
-          <Box sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            gap: 2
-          }}>
-            {menuItems.map((item) => (
-              <Box
-                key={item.text}
-                component={Link}
-                to={item.path}
-                sx={{
-                  width: 250,
-                  backgroundColor: 'white',
-                  padding: 2,
-                  borderRadius: 2,
-                  boxShadow: 2,
-                  textAlign: 'center',
-                  transition: 'box-shadow 0.3s ease-in-out',
-                  '&:hover': {
-                    boxShadow: '0px 4px 20px rgba(0,0,0,0.2)',
-                  },
-                  textDecoration: 'none',
-                  color: 'inherit',
-                }}
-              >
-                <Typography variant="h6">{item.text}</Typography>
-              </Box>
-            ))}
-          </Box>
-        </Box>
+        {children}
       </Main>
     </Box>
   );
 };
 
-export default Dashboard;
+export default DashboardLayout;
