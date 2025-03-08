@@ -3,7 +3,12 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+console.log('DATABASE_URL:', process.env.DATABASE_URL);
+console.log('SSL Config:', { rejectUnauthorized: false });
+
 export const pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.PG_SSL === "true" ? { rejectUnauthorized: false } : false
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
