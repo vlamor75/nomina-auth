@@ -2,35 +2,73 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { Pool } = require('pg');
-const { requireAuth } = require('./middleware/auth');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
+// Es posible que necesites instalar node-fetch
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
+// Configurar variables de entorno
 dotenv.config();
 
+// Crear la conexión a la base de datos
 const pool = new Pool({
-    user: process.env.DB_USER || "postgres",
-    host: process.env.DB_HOST || "localhost",
-    database: process.env.DB_NAME || "nomina_prueba",
-    password: process.env.DB_PASSWORD || "N0m1n@",
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
     port: process.env.DB_PORT || 5432,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
+
+
+// AQUÍ COLOCAS EL CÓDIGO DE DIAGNÓSTICO
+// Prueba de conexión a la base de datos
+pool.query('SELECT NOW()', (err, res) => {
+    if (err) {
+        console.error('Error al conectar a la base de datos:', err);
+    } else {
+        console.log('Conexión a la base de datos exitosa:', res.rows[0]);
+    }
+});
+
+// Crear tabla session en el esquema público
+pool.query(`
+    CREATE TABLE IF NOT EXISTS "public"."session" (
+      "sid" varchar NOT NULL,
+      "sess" json NOT NULL,
+      "expire" timestamp(6) NOT NULL,
+      CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+    )
+  `, (err, res) => {
+    if (err) {
+      console.error('Error al crear tabla session:', err);
+    } else {
+      console.log('Tabla session verificada/creada en esquema público');
+    }
+  });
+
+// Middleware de autenticación
+const requireAuth = (req, res, next) => {
+    if (!req.session || !req.session.userInfo || !req.session.userInfo.email) {
+        return res.status(401).json({ error: 'No autenticado' });
+    }
+    next();
+};
 
 const app = express();
 
+// Configurar CORS
 app.use(cors({
     origin: 'http://localhost:3000',
     credentials: true
 }));
 app.use(express.json());
 
+// Configurar sesiones
 app.use(session({
-    store: new pgSession({
-        pool: pool,
-        ttl: 24 * 60 * 60,
-        tableName: 'session'
-    }),
-    secret: process.env.SESSION_SECRET || 'tu-secreto-seguro',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -39,6 +77,7 @@ app.use(session({
     }
 }));
 
+
 // Ruta de prueba
 app.get('/', (req, res) => {
     res.send('¡Servidor funcionando!');
@@ -46,11 +85,17 @@ app.get('/', (req, res) => {
 
 // Ruta para iniciar el flujo de autenticación con Cognito
 app.get('/login', (req, res) => {
-    const clientId = process.env.COGNITO_CLIENT_ID; // Agrega tu Client ID de Cognito
-    const redirectUri = 'http://localhost:3000/callback'; // URL de callback después de login
-    const cognitoDomain = process.env.COGNITO_DOMAIN; // Ejemplo: tu-dominio.auth.us-east-1.amazoncognito.com
+    // Verificar si ya está autenticado
+    if (req.session.userInfo) {
+        return res.redirect('http://localhost:3000/dashboard'); // Redirigir al dashboard si ya está autenticado
+    }
 
-    const loginUrl = `https://${cognitoDomain}/login?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&scope=email+openid+profile`;
+    const clientId = process.env.COGNITO_CLIENT_ID || '4jmcmm89ocil96840h63pb36ph';
+    const redirectUri = 'http://localhost:3001/callback'; // Importante: debe coincidir con lo configurado en Cognito
+    const cognitoDomain = process.env.COGNITO_DOMAIN || 'us-east-1v3ui3urrs.auth.us-east-1.amazoncognito.com';
+
+    // Usar prompt=login para forzar la autenticación incluso si hay sesiones previas
+    const loginUrl = `https://${cognitoDomain}/login?client_id=${clientId}&response_type=code&scope=email+openid+phone&redirect_uri=${encodeURIComponent(redirectUri)}&prompt=login`;
 
     res.redirect(loginUrl);
 });
@@ -63,10 +108,10 @@ app.get('/callback', async (req, res) => {
     }
 
     try {
-        const clientId = process.env.COGNITO_CLIENT_ID;
-        const clientSecret = process.env.COGNITO_CLIENT_SECRET; // Si tienes Client Secret
-        const redirectUri = 'http://localhost:3000/callback';
-        const cognitoDomain = process.env.COGNITO_DOMAIN;
+        const clientId = process.env.COGNITO_CLIENT_ID || '4jmcmm89ocil96840h63pb36ph';
+        const clientSecret = process.env.COGNITO_CLIENT_SECRET || '1dlnuaf446pe1jcu4tuennknvb5umpdt975doujh4icguer250oa';
+        const redirectUri = 'http://localhost:3001/callback'; // Debe coincidir con la configuración de Cognito
+        const cognitoDomain = process.env.COGNITO_DOMAIN || 'us-east-1v3ui3urrs.auth.us-east-1.amazoncognito.com';
 
         const tokenUrl = `https://${cognitoDomain}/oauth2/token`;
         const response = await fetch(tokenUrl, {
@@ -85,6 +130,7 @@ app.get('/callback', async (req, res) => {
 
         const tokenData = await response.json();
         if (tokenData.error) {
+            console.error('Error en respuesta de token:', tokenData);
             return res.status(400).json({ error: tokenData.error });
         }
 
@@ -96,6 +142,7 @@ app.get('/callback', async (req, res) => {
             }
         });
         const userInfo = await userResponse.json();
+        console.log('Información de usuario obtenida:', userInfo);
 
         // Guardar la información del usuario en la sesión
         req.session.userInfo = {
@@ -103,13 +150,49 @@ app.get('/callback', async (req, res) => {
             name: userInfo.name,
             phone_number: userInfo.phone_number
         };
+        req.session.tokenSet = tokenData;
 
-        // Redirigir al frontend después de autenticar
-        res.redirect('http://localhost:3000/empresa');
+        console.log('Redirigiendo al dashboard después de autenticar');
+        // Redirigir al dashboard del frontend después de autenticar
+        res.redirect('http://localhost:3000/dashboard');
     } catch (error) {
         console.error('Error en callback:', error);
         res.status(500).json({ error: 'Error al autenticar', details: error.message });
     }
+});
+
+// Ruta para obtener información del usuario autenticado
+app.get('/api/auth/me', (req, res) => {
+    console.log('Solicitud a /api/auth/me. Sesión:', req.session.userInfo ? 'Existe' : 'No existe');
+    if (req.session.userInfo && req.session.userInfo.email) {
+        res.json({
+            isAuthenticated: true,
+            userInfo: req.session.userInfo
+        });
+    } else {
+        res.json({
+            isAuthenticated: false
+        });
+    }
+});
+
+// Ruta para cerrar sesión
+app.get('/logout', (req, res) => {
+    // Guardar el ID del cliente antes de destruir la sesión
+    const clientId = process.env.COGNITO_CLIENT_ID || '4jmcmm89ocil96840h63pb36ph';
+    const cognitoDomain = process.env.COGNITO_DOMAIN || 'us-east-1v3ui3urrs.auth.us-east-1.amazoncognito.com';
+    const logoutUri = 'http://localhost:3001/login';
+    
+    // Destruir la sesión
+    req.session.destroy((err) => {
+        if (err) {
+            console.error('Error al cerrar sesión:', err);
+        }
+        
+        // Redirigir a la página de logout de Cognito
+        const logoutUrl = `https://${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
+        res.redirect(logoutUrl);
+    });
 });
 
 // Ruta protegida para crear empresa
@@ -182,6 +265,7 @@ app.get('/api/user-schema', requireAuth, async (req, res) => {
     }
 });
 
+// Iniciar el servidor
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en puerto ${PORT}`);
