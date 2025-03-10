@@ -3,14 +3,30 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const { Pool } = require('pg');
 const session = require('express-session');
-const pgSession = require('connect-pg-simple')(session);
 // Es posible que necesites instalar node-fetch
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+
+// Importar funciones de esquema (manera actualizada)
+const schemaUtils = require('./utils/schemaUtils');
 
 // Configurar variables de entorno
 dotenv.config();
 
 // Crear la conexión a la base de datos
+console.log("DB Connection Config:", {
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD ? "******" : undefined, // No mostrar la contraseña real
+    port: process.env.DB_PORT || 5432
+});
+
+// Si la contraseña no está definida, establecer un valor por defecto
+if (!process.env.DB_PASSWORD) {
+    console.error("DB_PASSWORD no está definido en el archivo .env");
+    process.exit(1);
+}
+
 const pool = new Pool({
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
@@ -18,12 +34,11 @@ const pool = new Pool({
     password: process.env.DB_PASSWORD,
     port: process.env.DB_PORT || 5432,
     ssl: {
-        rejectUnauthorized: false
+        rejectUnauthorized: false,
+        sslmode: 'require'
     }
 });
 
-
-// AQUÍ COLOCAS EL CÓDIGO DE DIAGNÓSTICO
 // Prueba de conexión a la base de datos
 pool.query('SELECT NOW()', (err, res) => {
     if (err) {
@@ -33,21 +48,21 @@ pool.query('SELECT NOW()', (err, res) => {
     }
 });
 
-// Crear tabla session en el esquema público
+// Crear tabla session en el esquema cliente_base en lugar de público
 pool.query(`
-    CREATE TABLE IF NOT EXISTS "public"."session" (
-      "sid" varchar NOT NULL,
-      "sess" json NOT NULL,
-      "expire" timestamp(6) NOT NULL,
-      CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
-    )
-  `, (err, res) => {
-    if (err) {
-      console.error('Error al crear tabla session:', err);
-    } else {
-      console.log('Tabla session verificada/creada en esquema público');
-    }
-  });
+  CREATE TABLE IF NOT EXISTS "cliente_base"."session" (
+    "sid" varchar NOT NULL,
+    "sess" json NOT NULL,
+    "expire" timestamp(6) NOT NULL,
+    CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+  )
+`, (err, res) => {
+  if (err) {
+    console.error('Error al crear tabla session en cliente_base:', err);
+  } else {
+    console.log('Tabla session verificada/creada en esquema cliente_base');
+  }
+});
 
 // Middleware de autenticación
 const requireAuth = (req, res, next) => {
@@ -55,6 +70,11 @@ const requireAuth = (req, res, next) => {
         return res.status(401).json({ error: 'No autenticado' });
     }
     next();
+};
+
+// Crear una función que cierre sobre el pool para el middleware useUserSchema
+const useUserSchema = (req, res, next) => {
+    return schemaUtils.useUserSchema(pool, req, res, next);
 };
 
 const app = express();
@@ -66,7 +86,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Configurar sesiones
+// Configurar sesiones (sin almacenamiento en BD por ahora)
 app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
@@ -76,7 +96,6 @@ app.use(session({
         maxAge: 24 * 60 * 60 * 1000
     }
 }));
-
 
 // Ruta de prueba
 app.get('/', (req, res) => {
@@ -94,8 +113,9 @@ app.get('/login', (req, res) => {
     const redirectUri = 'http://localhost:3001/callback'; // Importante: debe coincidir con lo configurado en Cognito
     const cognitoDomain = process.env.COGNITO_DOMAIN || 'us-east-1v3ui3urrs.auth.us-east-1.amazoncognito.com';
 
-    // Usar prompt=login para forzar la autenticación incluso si hay sesiones previas
-    const loginUrl = `https://${cognitoDomain}/login?client_id=${clientId}&response_type=code&scope=email+openid+phone&redirect_uri=${encodeURIComponent(redirectUri)}&prompt=login`;
+    
+    
+    const loginUrl = `https://${cognitoDomain}/oauth2/authorize?client_id=${clientId}&response_type=code&scope=email+openid&redirect_uri=${encodeURIComponent(redirectUri)}`;
 
     res.redirect(loginUrl);
 });
@@ -108,10 +128,10 @@ app.get('/callback', async (req, res) => {
     }
 
     try {
-        const clientId = process.env.COGNITO_CLIENT_ID || '4jmcmm89ocil96840h63pb36ph';
-        const clientSecret = process.env.COGNITO_CLIENT_SECRET || '1dlnuaf446pe1jcu4tuennknvb5umpdt975doujh4icguer250oa';
-        const redirectUri = 'http://localhost:3001/callback'; // Debe coincidir con la configuración de Cognito
-        const cognitoDomain = process.env.COGNITO_DOMAIN || 'us-east-1v3ui3urrs.auth.us-east-1.amazoncognito.com';
+        const clientId = process.env.COGNITO_CLIENT_ID;
+        const clientSecret = process.env.COGNITO_CLIENT_SECRET;
+        const redirectUri = 'http://localhost:3001/callback';
+        const cognitoDomain = process.env.COGNITO_DOMAIN;
 
         const tokenUrl = `https://${cognitoDomain}/oauth2/token`;
         const response = await fetch(tokenUrl, {
@@ -144,11 +164,22 @@ app.get('/callback', async (req, res) => {
         const userInfo = await userResponse.json();
         console.log('Información de usuario obtenida:', userInfo);
 
-        // Guardar la información del usuario en la sesión
+        // Configurar el esquema para este usuario (pasando el pool)
+        const schemaInfo = await schemaUtils.setupUserSchema(
+            pool,  // Pasar el pool como primer argumento
+            userInfo.email, 
+            userInfo.name, 
+            userInfo.phone_number
+        );
+
+        // Guardar la información del usuario y esquema en la sesión
         req.session.userInfo = {
             email: userInfo.email,
             name: userInfo.name,
-            phone_number: userInfo.phone_number
+            phone_number: userInfo.phone_number,
+            empresaId: schemaInfo.empresaId,
+            empresaNombre: schemaInfo.empresaNombre,
+            schemaName: schemaInfo.schemaName
         };
         req.session.tokenSet = tokenData;
 
@@ -225,25 +256,54 @@ app.delete('/api/empresa/:id', requireAuth, async (req, res) => {
     try {
         const empresaId = req.params.id;
         const userEmail = req.session.userInfo.email;
+        const schemaName = `empresa_${empresaId}`;
+        
+        console.log(`Iniciando eliminación de empresa ${empresaId} con esquema ${schemaName}`);
+        
+        // Verificar que la empresa pertenezca al usuario
         const empresaCheck = await pool.query(
             'SELECT email FROM cliente_base.empresa WHERE id = $1',
             [empresaId]
         );
+        
         if (empresaCheck.rows.length === 0 || empresaCheck.rows[0].email !== userEmail) {
             return res.status(403).json({ error: 'No tienes permiso para eliminar esta empresa' });
         }
 
-        await pool.query(
-            'SELECT cliente_base.eliminar_empresa($1)',
-            [empresaId]
-        );
+        // IMPORTANTE: Intentar eliminar el esquema directamente con comillas dobles en el nombre
+        console.log(`Intentando eliminar esquema "${schemaName}"...`);
+        try {
+            await pool.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+            console.log(`Esquema "${schemaName}" eliminado correctamente (o no existía)`);
+        } catch (schemaError) {
+            console.error(`Error al eliminar esquema "${schemaName}":`, schemaError);
+        }
+        
+        // Ahora eliminar el registro de la empresa
+        console.log(`Eliminando registro de empresa ${empresaId}...`);
+        await pool.query('DELETE FROM cliente_base.empresa WHERE id = $1', [empresaId]);
+        console.log(`Registro de empresa ${empresaId} eliminado correctamente`);
 
-        res.status(200).json({ mensaje: 'Empresa y esquema eliminados correctamente' });
+        // Limpiar la información del usuario en la sesión
+        if (req.session.userInfo && req.session.userInfo.empresaId === parseInt(empresaId)) {
+            delete req.session.userInfo.empresaId;
+            delete req.session.userInfo.empresaNombre;
+            delete req.session.userInfo.schemaName;
+            console.log('Información de la empresa eliminada de la sesión');
+        }
+
+        res.status(200).json({ 
+            mensaje: 'Empresa eliminada correctamente',
+            schemaEliminado: true
+        });
     } catch (error) {
         console.error('Error al eliminar empresa:', error);
         res.status(500).json({ error: 'Error al eliminar la empresa', details: error.message });
     }
 });
+
+
+
 
 // Ruta protegida para obtener el esquema del usuario
 app.get('/api/user-schema', requireAuth, async (req, res) => {
@@ -262,6 +322,38 @@ app.get('/api/user-schema', requireAuth, async (req, res) => {
     } catch (error) {
         console.error('Error al obtener esquema:', error);
         res.status(500).json({ error: 'Error al obtener el esquema', details: error.message });
+    }
+});
+
+// Ruta para obtener información del usuario y su esquema
+app.get('/api/user-context', requireAuth, (req, res) => {
+    if (!req.session || !req.session.userInfo) {
+        return res.status(401).json({ isAuthenticated: false });
+    }
+    
+    res.json({
+        isAuthenticated: true,
+        userInfo: {
+            email: req.session.userInfo.email,
+            name: req.session.userInfo.name,
+            phone: req.session.userInfo.phone_number
+        },
+        empresa: {
+            id: req.session.userInfo.empresaId,
+            nombre: req.session.userInfo.empresaNombre,
+            schema: req.session.userInfo.schemaName
+        }
+    });
+});
+
+// Ejemplo de ruta protegida que usa el esquema del usuario
+app.get('/api/personas', requireAuth, useUserSchema, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM persona');
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error al obtener datos de persona:', error);
+        res.status(500).json({ error: 'Error al obtener datos', details: error.message });
     }
 });
 

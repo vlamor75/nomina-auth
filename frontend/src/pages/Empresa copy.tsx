@@ -258,6 +258,41 @@ const Empresa: React.FC = () => {
     }
   };
 
+  // 📌 Eliminar empresa
+  const handleDelete = async () => {
+    if (!existingEmpresa) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      console.log("Eliminando empresa con ID:", existingEmpresa.id);
+      const response = await axios.delete(`${API_URL}?id=${existingEmpresa.id}`);
+      console.log("Respuesta de eliminación:", response.data);
+      setSuccess("Empresa eliminada exitosamente.");
+      setExistingEmpresa(null);
+      setFormData({
+        empresa: '',
+        contacto: userName, // Mantener el nombre del usuario autenticado
+        email: userEmail, // Mantener el email del usuario
+        celular: userPhone, // Mantener el teléfono del usuario autenticado
+        direccion: '',
+        nit: '',
+        departamento_id: '',
+        municipio_id: '',
+        tipo_empresa_id: '',
+      });
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 2000);
+    } catch (err: unknown) {
+      const error = err as any;
+      console.error('Error al eliminar empresa:', error);
+      setError(error.response?.data?.error || 'No se pudo eliminar la empresa.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Mostrar estado de carga o error de autenticación
   if (loadingAuth) {
     return (
@@ -329,7 +364,7 @@ const Empresa: React.FC = () => {
           </Select>
         </FormControl>
 
-        <Box sx={{ mt: 2 }}>
+        <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
           <Button
             variant="contained"
             color="primary"
@@ -339,6 +374,11 @@ const Empresa: React.FC = () => {
           >
             {loading ? <CircularProgress size={24} /> : existingEmpresa ? 'Actualizar Empresa' : 'Crear Empresa'}
           </Button>
+          {existingEmpresa && (
+            <Button variant="outlined" color="error" fullWidth onClick={handleDelete} disabled={loading}>
+              Eliminar Empresa
+            </Button>
+          )}
         </Box>
       </Box>
     </DashboardLayout>
