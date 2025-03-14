@@ -82,8 +82,15 @@ const app = express();
 // Configurar CORS
 app.use(cors({
     origin: 'http://localhost:3000',
-    credentials: true
+    credentials: true,
+    methods: 'GET, POST, PUT, DELETE, OPTIONS',
+    allowedHeaders: 'Content-Type, Authorization',
+    optionsSuccessStatus: 200
 }));
+
+
+
+
 app.use(express.json());
 
 // Configurar sesiones (sin almacenamiento en BD por ahora)

@@ -4,7 +4,7 @@ import {
   Box, Typography, CircularProgress, Alert
 } from '@mui/material';
 import DashboardLayout from '../components/DashboardLayout';
-import PlanillaCabecera from '../pages/Planilla/PlanillaCabecera';
+import PlanillaCabecera from './Planilla/PlanillaCabecera';
 
 // Interfaces
 interface AuthData {
@@ -49,7 +49,7 @@ const useAuth = (): { data: AuthData; loading: boolean; error: string | null } =
   return { data: authData, loading, error };
 };
 
-const Planilla: React.FC = () => {
+const PlanillaModular: React.FC = () => {
   const { data: authData, loading: loadingAuth, error: errorAuth } = useAuth();
   const clienteId = authData.empresaId;
   
@@ -90,4 +90,4 @@ const Planilla: React.FC = () => {
   );
 };
 
-export default Planilla;
+export default PlanillaModular;
