@@ -1,12 +1,19 @@
 import React, { useState } from 'react';
-import { AppBar, Toolbar, IconButton, Typography, Drawer, List, ListItem, ListItemIcon, ListItemText, Box, Divider, Tooltip, useMediaQuery } from '@mui/material';
+import { AppBar, Toolbar, IconButton, Typography, Drawer, List, ListItem, ListItemIcon, ListItemText, Box, Divider, Tooltip, useMediaQuery, Card, CardContent } from '@mui/material';
 import { useTheme, styled } from '@mui/material/styles';
 import { Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, Home as HomeIcon, Business as BusinessIcon, Person as PersonIcon, LocationCity as LocationCityIcon, Assignment as AssignmentIcon, MonetizationOn as MonetizationOnIcon, Description as DescriptionIcon, Logout as LogoutIcon } from '@mui/icons-material';
+import { Bar, Pie, Line } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip as ChartTooltip, Legend, ArcElement, LineElement, PointElement, Filler } from 'chart.js'; // Se agrega Filler
 import { Link } from 'react-router-dom';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, Legend, ArcElement, LineElement, PointElement, ChartDataLabels, Filler); // Registrar Filler
 
 const drawerWidth = 240;
 
-const Main = styled('main', { shouldForwardProp: (prop) => prop !== 'open' })<{ open: boolean }>(({ theme, open }) => ({
+const Main = styled('main', { shouldForwardProp: (prop) => prop !== 'open' })<{
+  open?: boolean;
+}>(({ theme, open }) => ({
   flexGrow: 1,
   padding: theme.spacing(3),
   marginLeft: 15,
@@ -28,7 +35,7 @@ const Dashboard = () => {
 
   const toggleDrawer = () => setOpen(!open);
 
-  const handleLogout = () => {
+  const handleLogout = (): void => {
     window.location.href = "http://localhost:3001/logout";
   };
 
@@ -39,9 +46,79 @@ const Dashboard = () => {
     { text: 'Sede', icon: <LocationCityIcon />, path: '/sede' },
     { text: 'Asignación Sede', icon: <LocationCityIcon />, path: '/asignacion-sede' },
     { text: 'Contrato', icon: <DescriptionIcon />, path: '/contrato' },
-    { text: 'Deducciones', icon: <MonetizationOnIcon />, path: '/deducciones' },
     { text: 'Planilla', icon: <AssignmentIcon />, path: '/planilla' },
   ];
+
+  // Datos para los gráficos
+  const employeeData = {
+    labels: ['Hombres', 'Mujeres'],
+    datasets: [
+      {
+        label: 'Empleados',
+        data: [120, 80],
+        backgroundColor: ['#1976d2', '#e91e63'],
+        hoverOffset: 4,
+        borderWidth: 2,
+        borderColor: '#ffffff',
+      },
+    ],
+  };
+
+  const contractData = {
+    labels: ['Término Fijo', 'Indefinidos'],
+    datasets: [
+      {
+        label: 'Contratos',
+        data: [50, 150],
+        backgroundColor: ['#ff9800', '#4caf50'],
+        hoverOffset: 4,
+        borderWidth: 2,
+        borderColor: '#ffffff',
+      },
+    ],
+  };
+
+  const payrollData = {
+    labels: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio'],
+    datasets: [
+      {
+        label: 'Acumulado Mensual',
+        data: [8000, 9000, 10000, 11000, 12000, 13000],
+        borderColor: '#1976d2',
+        backgroundColor: 'rgba(25, 118, 210, 0.2)',
+        fill: true,
+        tension: 0.4,
+      },
+    ],
+  };
+
+  const contributionsData = {
+    labels: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio'],
+    datasets: [
+      {
+        label: 'Empleado',
+        data: [2000, 2200, 2400, 2600, 2800, 3000],
+        backgroundColor: '#1976d2',
+        barThickness: 20,
+      },
+      {
+        label: 'Empleador',
+        data: [3000, 3200, 3400, 3600, 3800, 4000],
+        backgroundColor: '#4caf50',
+        barThickness: 20,
+      },
+    ],
+  };
+
+  // Función de formateo tipada para evitar errores
+  const formatPercentage = (value: number, context: any): string => {
+    const data = Array.isArray(context.dataset.data)
+      ? context.dataset.data.filter((val: any): val is number => typeof val === 'number')
+      : [];
+    const total = data.reduce((acc: number, val: number) => acc + val, 0);
+    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+    return `${percentage}% (${value})`;
+  };
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#e3f2fd', padding: 0, margin: 0 }}>
@@ -73,7 +150,7 @@ const Dashboard = () => {
           {menuItems.map((item) => (
             <ListItem
               key={item.text}
-              component={Link}
+              component={Link as any}
               to={item.path}
               sx={{
                 cursor: 'pointer',
@@ -92,7 +169,7 @@ const Dashboard = () => {
         </List>
         <Divider />
         <ListItem
-          component="button"
+          component="div"
           onClick={handleLogout}
           sx={{
             cursor: 'pointer',
@@ -103,6 +180,7 @@ const Dashboard = () => {
             },
             border: 'none',
             marginTop: 2,
+            display: 'flex',
           }}
           aria-label="Cerrar sesión"
         >
@@ -112,47 +190,130 @@ const Dashboard = () => {
       </Drawer>
 
       <Main open={open}>
-        <Box sx={{
-          backgroundColor: 'white',
-          padding: 3,
-          borderRadius: 2,
-          boxShadow: 2,
-          maxWidth: '1000px',
-          margin: '20px auto',
-        }}>
-          <Typography variant="h4" sx={{ marginBottom: 2, textAlign: 'left' }}>
-            Bienvenido al Dashboard
-          </Typography>
-          <Box sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            gap: 2
-          }}>
-            {menuItems.map((item) => (
-              <Box
-                key={item.text}
-                component={Link}
-                to={item.path}
-                sx={{
-                  width: 250,
-                  backgroundColor: 'white',
-                  padding: 2,
-                  borderRadius: 2,
-                  boxShadow: 2,
-                  textAlign: 'center',
-                  transition: 'box-shadow 0.3s ease-in-out',
-                  '&:hover': {
-                    boxShadow: '0px 4px 20px rgba(0,0,0,0.2)',
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 3 }}>
+          {/* Gráfico de Empleados */}
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ textAlign: 'center' }}>
+                Distribución de Empleados
+              </Typography>
+              <Pie data={employeeData} options={{
+                plugins: {
+                  datalabels: {
+                    color: '#ffffff',
+                    font: { weight: 'bold' },
+                    formatter: (value: number, context: any) => formatPercentage(value, context),
                   },
-                  textDecoration: 'none',
-                  color: 'inherit',
-                }}
-              >
-                <Typography variant="h6">{item.text}</Typography>
+                },
+              }} />
+              <Box sx={{ marginTop: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body1">Hombres:</Typography>
+                  <Typography variant="body1">120</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body1">Mujeres:</Typography>
+                  <Typography variant="body1">80</Typography>
+                </Box>
+                <Divider sx={{ my: 1 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>Total:</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>200</Typography>
+                </Box>
               </Box>
-            ))}
-          </Box>
+            </CardContent>
+          </Card>
+
+          {/* Gráfico de Contratos */}
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ textAlign: 'center' }}>
+                Proporción de Contratos
+              </Typography>
+              <Pie data={contractData} options={{
+                plugins: {
+                  datalabels: {
+                    color: '#ffffff',
+                    font: { weight: 'bold' },
+                    formatter: (value: number, context: any) => formatPercentage(value, context),
+                  },
+                },
+              }} />
+              <Box sx={{ marginTop: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body1">Término Fijo:</Typography>
+                  <Typography variant="body1">50</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body1">Indefinidos:</Typography>
+                  <Typography variant="body1">150</Typography>
+                </Box>
+                <Divider sx={{ my: 1 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>Total:</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>200</Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Gráfico de Nómina */}
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ textAlign: 'center' }}>
+                Acumulado Mensual de Nómina
+              </Typography>
+              <Line data={payrollData} options={{
+                plugins: {
+                  datalabels: {
+                    display: false,
+                  },
+                },
+              }} />
+              <Box sx={{ marginTop: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body1">Acumulado en Junio:</Typography>
+                  <Typography variant="body1">$13,000</Typography>
+                </Box>
+                <Divider sx={{ my: 1 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>Total Anual:</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>$72,000</Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Gráfico de Aportes Parafiscales */}
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ textAlign: 'center' }}>
+                Aportes Parafiscales
+              </Typography>
+              <Bar data={contributionsData} options={{
+                plugins: {
+                  datalabels: {
+                    display: false,
+                  },
+                },
+              }} />
+              <Box sx={{ marginTop: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body1">Aporte Empleado en Junio:</Typography>
+                  <Typography variant="body1">$3,000</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body1">Aporte Empleador en Junio:</Typography>
+                  <Typography variant="body1">$4,000</Typography>
+                </Box>
+                <Divider sx={{ my: 1 }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>Total en Junio:</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>$7,000</Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
         </Box>
       </Main>
     </Box>

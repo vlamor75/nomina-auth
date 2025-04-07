@@ -43,7 +43,6 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { text: 'Sede', icon: <LocationCityIcon />, path: '/sede' },
     { text: 'Asignación Sede', icon: <LocationCityIcon />, path: '/asignacion-sede' },
     { text: 'Contrato', icon: <DescriptionIcon />, path: '/contrato' },
-    { text: 'Deducciones', icon: <MonetizationOnIcon />, path: '/deducciones' },
     { text: 'Planilla', icon: <AssignmentIcon />, path: '/planilla' },
   ];
 

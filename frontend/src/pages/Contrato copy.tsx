@@ -32,18 +32,19 @@ interface ContratoData {
   id_regimen_fiscal?: number;
   id_responsabilidad_fiscal?: number;
   // Campos adicionales para mostrar en la tabla (provenientes de JOIN)
-  primer_nombre?: string;
-  segundo_nombre?: string;
-  primer_apellido?: string;
-  segundo_apellido?: string;
-  identificacion?: number;
-  cargo_nombre?: string;
-  tipo_contrato_nombre?: string;
-  tipo_vinculacion_nombre?: string;
-  jornada_laboral_nombre?: string;
-  regimen_fiscal_nombre?: string;
-  responsabilidad_fiscal_nombre?: string;
-  [key: string]: any;
+  // Campos adicionales para mostrar en la tabla (provenientes de JOIN)
+ primer_nombre?: string;
+ segundo_nombre?: string;
+ primer_apellido?: string;
+ segundo_apellido?: string;
+ identificacion?: number;
+ cargo_nombre?: string;
+ tipo_contrato_nombre?: string;
+ tipo_vinculacion_nombre?: string;
+ jornada_laboral_nombre?: string;
+ regimen_fiscal_nombre?: string;
+ responsabilidad_fiscal_nombre?: string;
+ [key: string]: any;
 }
 
 interface CatalogoItem {
@@ -246,43 +247,9 @@ const Contrato: React.FC = () => {
 
  // Manejador para los Select
  const handleSelectChange = (e: SelectChangeEvent) => {
-  const { name, value } = e.target;
-  setFormData(prev => ({...prev, [name]: value === '' ? 0 : Number(value)}));
-  
-  // Si se cambió el tipo de vinculación, ajustamos el tipo de contrato según corresponda
-  if (name === 'id_tipo_vinculacion') {
-    const tipoVinculacionId = Number(value);
-    
-    // Buscar el tipo de vinculación seleccionado para obtener su nombre
-    const tipoVinculacionSeleccionado = tiposVinculacion.find(
-      tipo => tipo.id === tipoVinculacionId
-    );
-    
-    // Identificar si es contratista o empleado
-    const esContratista = tipoVinculacionSeleccionado?.nombre.toLowerCase().includes('contratista');
-    const esEmpleado = tipoVinculacionSeleccionado?.nombre.toLowerCase().includes('empleado');
-    
-    // Identificar el id del tipo de contrato "Contrato por prestación de servicios"
-    const contratoPrestacionServiciosId = tiposContrato.find(
-      tipo => tipo.nombre.toLowerCase().includes('prestación de servicios')
-    )?.id;
-    
-    // Si cambió a contratista, establecer automáticamente el tipo de contrato
-    if (esContratista && contratoPrestacionServiciosId) {
-      setFormData(prev => ({
-        ...prev,
-        id_tipo_contrato: contratoPrestacionServiciosId
-      }));
-    } 
-    // Si cambió a empleado y tenía seleccionado prestación de servicios, resetear
-    else if (esEmpleado && formData.id_tipo_contrato === contratoPrestacionServiciosId) {
-      setFormData(prev => ({
-        ...prev,
-        id_tipo_contrato: 0
-      }));
-    }
-  }
-};
+   const { name, value } = e.target;
+   setFormData(prev => ({...prev, [name]: value === '' ? 0 : Number(value)}));
+ };
  
  // Manejador para cambio de pestañas
  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -696,189 +663,162 @@ const Contrato: React.FC = () => {
              </Grid>
              
              <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Jornada Laboral</InputLabel>
-                <Select
-                  name="jornada_laboral_id"
-                  value={String(formData.jornada_laboral_id || '')}
-                  onChange={handleSelectChange}
-                  label="Jornada Laboral"
-                  disabled={loadingCatalogos}
-                >
-                  <MenuItem value=""><em>Seleccione</em></MenuItem>
-                  {jornadasLaborales.map(jornada => (
-                    <MenuItem key={jornada.id} value={String(jornada.id)}>{jornada.nombre}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            {/* Información del contrato */}
-            <Grid item xs={12}>
-              <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Información del Contrato</Typography>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth required>
-                <InputLabel>Tipo de Contrato</InputLabel>
-                <Select
-                  name="id_tipo_contrato"
-                  value={String(formData.id_tipo_contrato || '')}
-                  onChange={handleSelectChange}
-                  label="Tipo de Contrato"
-                  disabled={loadingCatalogos}
-                >
-                  <MenuItem value=""><em>Seleccione</em></MenuItem>
-                  {tiposContrato
-                    .filter(tipo => {
-                      // Buscar el tipo de vinculación seleccionado
-                      const tipoVinculacionSeleccionado = tiposVinculacion.find(
-                        t => t.id === formData.id_tipo_vinculacion
-                      );
-                      
-                      // Si no hay tipo de vinculación seleccionado, mostrar todos
-                      if (!tipoVinculacionSeleccionado) return true;
-                      
-                      const esContratista = tipoVinculacionSeleccionado.nombre.toLowerCase().includes('contratista');
-                      const esEmpleado = tipoVinculacionSeleccionado.nombre.toLowerCase().includes('empleado');
-                      
-                      // Para contratista, solo mostrar "Contrato por prestación de servicios"
-                      if (esContratista) {
-                        return tipo.nombre.toLowerCase().includes('prestación de servicios');
-                      }
-                      
-                      // Para empleado, mostrar todos menos "Contrato por prestación de servicios"
-                      if (esEmpleado) {
-                        return !tipo.nombre.toLowerCase().includes('prestación de servicios');
-                      }
-                      
-                      // Para otros tipos de vinculación, mostrar todos
-                      return true;
-                    })
-                    .map(tipo => (
-                      <MenuItem key={tipo.id} value={String(tipo.id)}>{tipo.nombre}</MenuItem>
-                    ))
-                  }
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <TextField
-                label="Salario"
-                name="salario"
-                type="text"
-                value={formData.salario}
-                onChange={handleTextFieldChange}
-                fullWidth
-                required
-                variant="outlined"
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">$</InputAdornment>,
-                }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <TextField
-                label="Fecha de Inicio"
-                name="fecha_inicio"
-                type="date"
-                value={formData.fecha_inicio}
-                onChange={handleTextFieldChange}
-                fullWidth
-                required
-                variant="outlined"
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <TextField
-                label="Fecha de Fin (opcional)"
-                name="fecha_fin"
-                type="date"
-                value={formData.fecha_fin}
-                onChange={handleTextFieldChange}
-                fullWidth
-                variant="outlined"
-                InputLabelProps={{ shrink: true }}
-                helperText="Dejar en blanco si el contrato no tiene fecha de finalización"
-              />
-            </Grid>
-            
-            {/* Información fiscal */}
-            <Grid item xs={12}>
-              <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Información Fiscal</Typography>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Régimen Fiscal</InputLabel>
-                <Select
-                  name="id_regimen_fiscal"
-                  value={String(formData.id_regimen_fiscal || '')}
-                  onChange={handleSelectChange}
-                  label="Régimen Fiscal"
-                  disabled={loadingCatalogos}
-                >
-                  <MenuItem value=""><em>Seleccione</em></MenuItem>
-                  {regimenesFiscales.map(regimen => (
-                    <MenuItem key={regimen.id} value={String(regimen.id)}>{regimen.nombre}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Responsabilidad Fiscal</InputLabel>
-                <Select
-                  name="id_responsabilidad_fiscal"
-                  value={String(formData.id_responsabilidad_fiscal || '')}
-                  onChange={handleSelectChange}
-                  label="Responsabilidad Fiscal"
-                  disabled={loadingCatalogos}
-                >
-                  <MenuItem value=""><em>Seleccione</em></MenuItem>
-                  {responsabilidadesFiscales.map(resp => (
-                    <MenuItem key={resp.id} value={String(resp.id)}>{resp.nombre}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth>
-                <InputLabel>Estado</InputLabel>
-                <Select
-                  name="estado"
-                  value={formData.estado ? "1" : "0"}
-                  onChange={(e) => setFormData({...formData, estado: e.target.value === "1"})}
-                  label="Estado"
-                >
-                  <MenuItem value="1">Activo</MenuItem>
-                  <MenuItem value="0">Inactivo</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setDialogOpen(false)} color="inherit">Cancelar</Button>
-        <Button 
-          onClick={handleSaveContrato} 
-          color="primary" 
-          variant="contained"
-          disabled={loading}
-        >
-          {loading ? <CircularProgress size={24} /> : 'Guardar'}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  </DashboardLayout>
-);
+               <FormControl fullWidth>
+                 <InputLabel>Jornada Laboral</InputLabel>
+                 <Select
+                   name="jornada_laboral_id"
+                   value={String(formData.jornada_laboral_id || '')}
+                   onChange={handleSelectChange}
+                   label="Jornada Laboral"
+                   disabled={loadingCatalogos}
+                 >
+                   <MenuItem value=""><em>Seleccione</em></MenuItem>
+                   {jornadasLaborales.map(jornada => (
+                     <MenuItem key={jornada.id} value={String(jornada.id)}>{jornada.nombre}</MenuItem>
+                   ))}
+                 </Select>
+               </FormControl>
+             </Grid>
+             
+             {/* Información del contrato */}
+             <Grid item xs={12}>
+               <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Información del Contrato</Typography>
+             </Grid>
+             
+             <Grid item xs={12} md={6}>
+               <FormControl fullWidth required>
+                 <InputLabel>Tipo de Contrato</InputLabel>
+                 <Select
+                   name="id_tipo_contrato"
+                   value={String(formData.id_tipo_contrato || '')}
+                   onChange={handleSelectChange}
+                   label="Tipo de Contrato"
+                   disabled={loadingCatalogos}
+                 >
+                   <MenuItem value=""><em>Seleccione</em></MenuItem>
+                   {tiposContrato.map(tipo => (
+                     <MenuItem key={tipo.id} value={String(tipo.id)}>{tipo.nombre}</MenuItem>
+                   ))}
+                 </Select>
+               </FormControl>
+             </Grid>
+             
+             <Grid item xs={12} md={6}>
+               <TextField
+                 label="Salario"
+                 name="salario"
+                 type="text"
+                 value={formData.salario}
+                 onChange={handleTextFieldChange}
+                 fullWidth
+                 required
+                 variant="outlined"
+                 InputProps={{
+                   startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                 }}
+               />
+             </Grid>
+             
+             <Grid item xs={12} md={6}>
+               <TextField
+                 label="Fecha de Inicio"
+                 name="fecha_inicio"
+                 type="date"
+                 value={formData.fecha_inicio}
+                 onChange={handleTextFieldChange}
+                 fullWidth
+                 required
+                 variant="outlined"
+                 InputLabelProps={{ shrink: true }}
+               />
+             </Grid>
+             
+             <Grid item xs={12} md={6}>
+               <TextField
+                 label="Fecha de Fin (opcional)"
+                 name="fecha_fin"
+                 type="date"
+                 value={formData.fecha_fin}
+                 onChange={handleTextFieldChange}
+                 fullWidth
+                 variant="outlined"
+                 InputLabelProps={{ shrink: true }}
+                 helperText="Dejar en blanco si el contrato no tiene fecha de finalización"
+               />
+             </Grid>
+             
+             {/* Información fiscal */}
+             <Grid item xs={12}>
+               <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Información Fiscal</Typography>
+             </Grid>
+             
+             <Grid item xs={12} md={6}>
+               <FormControl fullWidth>
+                 <InputLabel>Régimen Fiscal</InputLabel>
+                 <Select
+                   name="id_regimen_fiscal"
+                   value={String(formData.id_regimen_fiscal || '')}
+                   onChange={handleSelectChange}
+                   label="Régimen Fiscal"
+                   disabled={loadingCatalogos}
+                 >
+                   <MenuItem value=""><em>Seleccione</em></MenuItem>
+                   {regimenesFiscales.map(regimen => (
+                     <MenuItem key={regimen.id} value={String(regimen.id)}>{regimen.nombre}</MenuItem>
+                   ))}
+                 </Select>
+               </FormControl>
+             </Grid>
+             
+             <Grid item xs={12} md={6}>
+               <FormControl fullWidth>
+                 <InputLabel>Responsabilidad Fiscal</InputLabel>
+                 <Select
+                   name="id_responsabilidad_fiscal"
+                   value={String(formData.id_responsabilidad_fiscal || '')}
+                   onChange={handleSelectChange}
+                   label="Responsabilidad Fiscal"
+                   disabled={loadingCatalogos}
+                 >
+                   <MenuItem value=""><em>Seleccione</em></MenuItem>
+                   {responsabilidadesFiscales.map(resp => (
+                     <MenuItem key={resp.id} value={String(resp.id)}>{resp.nombre}</MenuItem>
+                   ))}
+                 </Select>
+               </FormControl>
+             </Grid>
+             
+             <Grid item xs={12} md={6}>
+               <FormControl fullWidth>
+                 <InputLabel>Estado</InputLabel>
+                 <Select
+                   name="estado"
+                   value={formData.estado ? "1" : "0"}
+                   onChange={(e) => setFormData({...formData, estado: e.target.value === "1"})}
+                   label="Estado"
+                 >
+                   <MenuItem value="1">Activo</MenuItem>
+                   <MenuItem value="0">Inactivo</MenuItem>
+                 </Select>
+               </FormControl>
+             </Grid>
+           </Grid>
+         </Box>
+       </DialogContent>
+       <DialogActions>
+         <Button onClick={() => setDialogOpen(false)} color="inherit">Cancelar</Button>
+         <Button 
+           onClick={handleSaveContrato} 
+           color="primary" 
+           variant="contained"
+           disabled={loading}
+         >
+           {loading ? <CircularProgress size={24} /> : 'Guardar'}
+         </Button>
+       </DialogActions>
+     </Dialog>
+   </DashboardLayout>
+ );
 };
 
 export default Contrato;
