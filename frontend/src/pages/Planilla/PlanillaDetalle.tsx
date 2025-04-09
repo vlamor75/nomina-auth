@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import PlanillaDeducciones from './PlanillaDeducciones';
 import {
   Box, Typography, Button, TextField, CircularProgress, Alert,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
@@ -1039,16 +1038,7 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
         </TableContainer>
       )}
 
-      {planillaDetalles.map((detalle) => (
-        <Box key={`deducciones-${detalle.id}`} sx={{ mt: 2 }}>
-          <PlanillaDeducciones 
-            clienteId={clienteId}
-            planillaDetalleId={detalle.id || 0}
-            nombreEmpleado={detalle.nombre_completo}
-            onDeduccionesChange={() => fetchPlanillaDetalles()} 
-          />
-        </Box>
-      ))}
+      
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>

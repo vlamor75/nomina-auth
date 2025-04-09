@@ -7,7 +7,6 @@ import Persona from "./pages/Persona";
 import Sede from "./pages/Sede";
 import AsignacionSede from "./pages/AsignacionSede";
 import Contrato from "./pages/Contrato";
-import Deducciones from "./pages/Deducciones";
 import Planilla from "./pages/Planilla";
 
 const App = () => {
@@ -21,7 +20,6 @@ const App = () => {
         <Route path="/sede" element={<PrivateRoute component={Sede} />} />
         <Route path="/asignacion-sede" element={<PrivateRoute component={AsignacionSede} />} />
         <Route path="/contrato" element={<PrivateRoute component={Contrato} />} />
-        <Route path="/deducciones" element={<PrivateRoute component={Deducciones} />} />
         <Route path="/planilla" element={<PrivateRoute component={Planilla} />} />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
