@@ -6,12 +6,15 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Dialog, DialogActions, DialogContent, DialogTitle,
   FormControl, InputLabel, Select, MenuItem, SelectChangeEvent,
-  IconButton, FormControlLabel, Switch, Radio, RadioGroup, FormLabel, FormGroup
+  IconButton, FormControlLabel, Radio, RadioGroup, FormLabel,
+  Card, CardContent, CardActions, Tabs, Tab, Grid, Tooltip
 } from '@mui/material';
 import { 
   Add as AddIcon, 
   Edit as EditIcon, 
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  EventNote as EventNoteIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 
 interface PlanillaDetalleData {
@@ -22,7 +25,9 @@ interface PlanillaDetalleData {
   dias_a_pagar: number;
   auxilio: number;
   valor_total_horas_extras: number;
+  horas_extras: number; // Total hours for horas extras
   recargos_nocturnos: number;
+  recargo_nocturno: number;
   pago_neto: number;
   id_contrato: number;
   id_tipo_pago: number;
@@ -31,6 +36,25 @@ interface PlanillaDetalleData {
   tipo_pago_nombre?: string;
   id_tipo_vinculacion?: number;
   id_tipo_contrato?: number;
+  salud_empleado: number;
+  pension_empleado: number;
+  embargo: number;
+  otros_descuentos: number;
+  prestamo_empresa: number;
+  retencion_en_la_fuente: number;
+  salud_empleador: number;
+  pension_empleador: number;
+  sena_empleador: number;
+  ICBF: number;
+  caja_compensacion_familiar: number;
+  cesantias: number;
+  prima_servicios: number;
+  vacaciones: number;
+  riesgos_laborales: number;
+  diurna: number; // Will store monetary value
+  nocturna: number; // Will store monetary value
+  diurna_festivo: number; // Will store monetary value
+  nocturna_festivo: number; // Will store monetary value
   [key: string]: any;
 }
 
@@ -66,18 +90,36 @@ const UMBRAL_AUXILIO_TRANSPORTE = 2847000;
 const VALOR_AUXILIO_TRANSPORTE = 200000;
 
 const TIPOS_HORAS_EXTRAS = [
-  { tipo: 'Hora Extra Diurna', horario: '6:00 a.m. - 9:00 p.m.', recargo: 0.25, descripcion: 'Trabajo adicional realizado durante el horario diurno.' },
-  { tipo: 'Hora Extra Nocturna', horario: '9:00 p.m. - 6:00 a.m.', recargo: 0.75, descripcion: 'Trabajo suplementario realizado en horario nocturno.' },
-  { tipo: 'Hora Extra Diurna en Domingo/Festivo', horario: '6:00 a.m. - 9:00 p.m.', recargo: 1.0, descripcion: 'Trabajo adicional en días festivos o domingos durante el horario diurno.' },
-  { tipo: 'Hora Extra Nocturna en Domingo/Festivo', horario: '9:00 p.m. - 6:00 a.m.', recargo: 1.5, descripcion: 'Trabajo suplementario realizado en horario nocturno durante domingos o festivos.' },
+  { tipo: 'Diurna', horario: '6:00 a.m. - 9:00 p.m.', recargo: 0.25, descripcion: 'Trabajo adicional realizado durante el horario diurno.' },
+  { tipo: 'Nocturna', horario: '9:00 p.m. - 6:00 a.m.', recargo: 0.75, descripcion: 'Trabajo suplementario realizado en horario nocturno.' },
+  { tipo: 'Diurna en Domingo/Festivo', horario: '6:00 a.m. - 9:00 p.m.', recargo: 1.0, descripcion: 'Trabajo adicional en días festivos o domingos durante el horario diurno.' },
+  { tipo: 'Nocturna en Domingo/Festivo', horario: '9:00 p.m. - 6:00 a.m.', recargo: 1.5, descripcion: 'Trabajo suplementario realizado en horario nocturno durante domingos o festivos.' },
 ];
 
 const RECARGOS_NOCTURNOS = [
-  { tipo: 'Recargo Nocturno', horario: '9:00 p.m. - 6:00 a.m.', recargo: 0.35, descripcion: 'Pago adicional por trabajar en horario nocturno, independientemente de que sean horas extras o no.' },
+  { tipo: 'Recargo Nocturno', horario: '9:00 p.m. - 6:00 a.m.', recargo: 0.35, descripcion: 'Pago adicional por trabajar en horario nocturno, independientemente de que sean horas extras o no. Máximo 270 horas al mes (9 horas por día).' },
 ];
 
-const MAX_HORAS_NOCTURNAS_POR_DIA = 9; // Máximo 9 horas por día (de 9:00 p.m. a 6:00 a.m.)
-const MAX_HORAS_NOCTURNAS_MENSUAL = 270; // Máximo 9 horas por día * 30 días = 270 horas al mes
+const DEDUCCIONES = [
+  { tipo: 'Salud Empleado', porcentaje: 0.04, descripcion: 'Aporte a salud del empleado (4% del salario base).', editable: false },
+  { tipo: 'Salud Empleador', porcentaje: 0.085, descripcion: 'Aporte a salud del empleador (8.5% del salario base).', editable: false },
+  { tipo: 'Pensión Empleado', porcentaje: 0.04, descripcion: 'Aporte a pensión del empleado (4% del salario base).', editable: false },
+  { tipo: 'Pensión Empleador', porcentaje: 0.12, descripcion: 'Aporte a pensión del empleador (12% del salario base).', editable: false },
+  { tipo: 'SENA Empleador', porcentaje: 0.02, descripcion: 'Aporte al SENA del empleador (2% del salario base).', editable: false },
+  { tipo: 'ICBF', porcentaje: 0.03, descripcion: 'Aporte al ICBF del empleador (3% del salario base).', editable: false },
+  { tipo: 'Caja Compensación Familiar', porcentaje: 0.04, descripcion: 'Aporte a caja de compensación familiar del empleador (4% del salario base).', editable: false },
+  { tipo: 'Cesantías', porcentaje: 0.0833, descripcion: 'Aporte a cesantías del empleador (8.33% del salario base).', editable: false },
+  { tipo: 'Prima de Servicios', porcentaje: 0.0833, descripcion: 'Aporte a prima de servicios del empleador (8.33% del salario base).', editable: false },
+  { tipo: 'Vacaciones', porcentaje: 0.0417, descripcion: 'Aporte a vacaciones del empleador (4.17% del salario base).', editable: false },
+  { tipo: 'Riesgos Laborales', porcentaje: 0, descripcion: 'Aporte a riesgos laborales del empleador (porcentaje variable).', editable: false },
+  { tipo: 'Embargo', porcentaje: 0, descripcion: 'Deducción por embargo (porcentaje definido por el usuario).', editable: true },
+  { tipo: 'Otros Descuentos', porcentaje: 0, descripcion: 'Otros descuentos definidos por el usuario.', editable: true },
+  { tipo: 'Préstamo Empresa', porcentaje: 0, descripcion: 'Deducción por préstamo de la empresa (porcentaje definido por el usuario).', editable: true },
+  { tipo: 'Retención en la Fuente', porcentaje: 0, descripcion: 'Deducción por retención en la fuente (porcentaje definido por el usuario).', editable: true },
+];
+
+const MAX_HORAS_NOCTURNAS_POR_DIA = 9;
+const MAX_HORAS_NOCTURNAS_MENSUAL = 270;
 
 const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId }) => {
   const [planillaDetalles, setPlanillaDetalles] = useState<PlanillaDetalleData[]>([]);
@@ -94,26 +136,67 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
     dias_a_pagar: 30,
     auxilio: 0,
     valor_total_horas_extras: 0,
+    horas_extras: 0,
     recargos_nocturnos: 0,
+    recargo_nocturno: 0,
     pago_neto: 0,
     id_contrato: 0,
-    id_tipo_pago: 0
+    id_tipo_pago: 0,
+    salud_empleado: 0,
+    pension_empleado: 0,
+    embargo: 0,
+    otros_descuentos: 0,
+    prestamo_empresa: 0,
+    retencion_en_la_fuente: 0,
+    salud_empleador: 0,
+    pension_empleador: 0,
+    sena_empleador: 0,
+    ICBF: 0,
+    caja_compensacion_familiar: 0,
+    cesantias: 0,
+    prima_servicios: 0,
+    vacaciones: 0,
+    riesgos_laborales: 0,
+    diurna: 0,
+    nocturna: 0,
+    diurna_festivo: 0,
+    nocturna_festivo: 0,
   });
 
   const [requiereAuxilio, setRequiereAuxilio] = useState<'si' | 'no'>('no');
-  const [requiereHorasExtras, setRequiereHorasExtras] = useState<'si' | 'no'>('no');
-  const [requiereRecargosNocturnos, setRequiereRecargosNocturnos] = useState<'si' | 'no'>('no');
-  const [horasExtrasDialogOpen, setHorasExtrasDialogOpen] = useState(false);
-  const [recargosNocturnosDialogOpen, setRecargosNocturnosDialogOpen] = useState(false);
+  const [novedadesDialogOpen, setNovedadesDialogOpen] = useState(false);
   const [horasExtrasData, setHorasExtrasData] = useState<{ [key: string]: number }>({
-    'Hora Extra Diurna': 0,
-    'Hora Extra Nocturna': 0,
-    'Hora Extra Diurna en Domingo/Festivo': 0,
-    'Hora Extra Nocturna en Domingo/Festivo': 0,
+    'Diurna': 0,
+    'Nocturna': 0,
+    'Diurna en Domingo/Festivo': 0,
+    'Nocturna en Domingo/Festivo': 0,
   });
   const [recargosNocturnosData, setRecargosNocturnosData] = useState<{ [key: string]: number }>({
     'Recargo Nocturno': 0,
   });
+  const [deduccionesData, setDeduccionesData] = useState<{ [key: string]: number }>({
+    'Salud Empleado': 0.04,
+    'Salud Empleador': 0.085,
+    'Pensión Empleado': 0.04,
+    'Pensión Empleador': 0.12,
+    'SENA Empleador': 0.02,
+    'ICBF': 0.03,
+    'Caja Compensación Familiar': 0.04,
+    'Cesantías': 0.0833,
+    'Prima de Servicios': 0.0833,
+    'Vacaciones': 0.0417,
+    'Riesgos Laborales': 0,
+    'Embargo': 0,
+    'Otros Descuentos': 0,
+    'Préstamo Empresa': 0,
+    'Retención en la Fuente': 0,
+  });
+  const [editHoraExtra, setEditHoraExtra] = useState<string | null>(null);
+  const [editRecargoNocturno, setEditRecargoNocturno] = useState<string | null>(null);
+  const [editDeduccion, setEditDeduccion] = useState<string | null>(null);
+  const [editHorasValue, setEditHorasValue] = useState<number>(0);
+  const [editDeduccionValue, setEditDeduccionValue] = useState<number>(0);
+  const [tabValue, setTabValue] = useState(0);
 
   const [personas, setPersonas] = useState<PersonaItem[]>([]);
   const [contratos, setContratos] = useState<ContratoItem[]>([]);
@@ -130,7 +213,7 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
 
   const fetchPlanillaDetalles = async () => {
     if (!clienteId || !planillaId) return;
-
+  
     try {
       setLoading(true);
       const payload = {
@@ -138,13 +221,58 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
         action: 'leer',
         id_planilla: planillaId
       };
-
+  
       const response = await axios.post(PLANILLA_DETALLE_API_URL, payload);
       if (response.data && Array.isArray(response.data)) {
-        const mappedData = response.data.map((detalle: any) => ({
-          ...detalle,
-          valor_total_horas_extras: detalle.horas_extras || 0,
-        }));
+        const mappedData = response.data.map((detalle: any) => {
+          const totalHorasExtrasHoras = (detalle.horas_extras || 0);
+  
+          const totalEmployeeDeductions = (detalle.salud_empleado || 0) +
+                                          (detalle.pension_empleado || 0) +
+                                          (detalle.embargo || 0) +
+                                          (detalle.otros_descuentos || 0) +
+                                          (detalle.prestamo_empresa || 0) +
+                                          (detalle.retencion_en_la_fuente || 0);
+  
+          const salarioPorDia = detalle.salario_base / 30;
+          const salarioPorDiasTrabajados = salarioPorDia * (detalle.dias_a_pagar || 0);
+          const totalHorasExtrasValue = (detalle.diurna || 0) +
+                                        (detalle.nocturna || 0) +
+                                        (detalle.diurna_festivo || 0) +
+                                        (detalle.nocturna_festivo || 0);
+          const totalIngresos = salarioPorDiasTrabajados +
+                                (detalle.auxilio || 0) +
+                                totalHorasExtrasValue +
+                                (detalle.recargo_nocturno || 0);
+          const pagoNeto = Math.round(totalIngresos - totalEmployeeDeductions);
+  
+          return {
+            ...detalle,
+            valor_total_horas_extras: totalHorasExtrasValue, // Update this to reflect the sum
+            horas_extras: totalHorasExtrasHoras,
+            pago_neto: pagoNeto,
+            salud_empleado: detalle.salud_empleado || 0,
+            pension_empleado: detalle.pension_empleado || 0,
+            embargo: detalle.embargo || 0,
+            otros_descuentos: detalle.otros_descuentos || 0,
+            prestamo_empresa: detalle.prestamo_empresa || 0,
+            retencion_en_la_fuente: detalle.retencion_en_la_fuente || 0,
+            salud_empleador: detalle.salud_empleador || 0,
+            pension_empleador: detalle.pension_empleador || 0,
+            sena_empleador: detalle.sena_empleador || 0,
+            ICBF: detalle.ICBF || 0,
+            caja_compensacion_familiar: detalle.caja_compensacion_familiar || 0,
+            cesantias: detalle.cesantias || 0,
+            prima_servicios: detalle.prima_servicios || 0,
+            vacaciones: detalle.vacaciones || 0,
+            riesgos_laborales: detalle.riesgos_laborales || 0,
+            diurna: detalle.diurna || 0,
+            nocturna: detalle.nocturna || 0,
+            diurna_festivo: detalle.diurna_festivo || 0,
+            nocturna_festivo: detalle.nocturna_festivo || 0,
+            total_deducciones: totalEmployeeDeductions,
+          };
+        });
         setPlanillaDetalles(mappedData);
       } else {
         setPlanillaDetalles([]);
@@ -221,7 +349,7 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
 
   const handleTextFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    if (['salario_base', 'dias_a_pagar', 'auxilio', 'valor_total_horas_extras', 'recargos_nocturnos'].includes(name)) {
+    if (['salario_base', 'dias_a_pagar', 'auxilio', 'valor_total_horas_extras', 'recargo_nocturno'].includes(name)) {
       const numValue = value === '' ? 0 : Number(value);
       setFormData(prev => {
         const newData = { ...prev, [name]: numValue };
@@ -229,13 +357,28 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
         const diasAPagar = name === 'dias_a_pagar' ? numValue : prev.dias_a_pagar;
         const auxilio = name === 'auxilio' ? numValue : prev.auxilio;
         const valorTotalHorasExtras = name === 'valor_total_horas_extras' ? numValue : prev.valor_total_horas_extras;
-        const recargosNocturnos = name === 'recargos_nocturnos' ? numValue : prev.recargos_nocturnos;
+        const recargoNocturno = name === 'recargo_nocturno' ? numValue : prev.recargo_nocturno;
+
+        const saludEmpleado = salarioBase * 0.04;
+        const pensionEmpleado = salarioBase * 0.04;
+        const totalEmployeeDeductions = saludEmpleado +
+                                        pensionEmpleado +
+                                        (prev.embargo || 0) +
+                                        (prev.otros_descuentos || 0) +
+                                        (prev.prestamo_empresa || 0) +
+                                        (prev.retencion_en_la_fuente || 0);
 
         const salarioPorDia = salarioBase / 30;
         const salarioPorDiasTrabajados = salarioPorDia * diasAPagar;
-        const pagoNeto = Math.round(salarioPorDiasTrabajados + auxilio + valorTotalHorasExtras + recargosNocturnos);
+        const totalIngresos = salarioPorDiasTrabajados + auxilio + valorTotalHorasExtras + recargoNocturno;
+        const pagoNeto = Math.round(totalIngresos - totalEmployeeDeductions);
 
-        return { ...newData, pago_neto: pagoNeto };
+        return { 
+          ...newData, 
+          salud_empleado: saludEmpleado,
+          pension_empleado: pensionEmpleado,
+          pago_neto: pagoNeto 
+        };
       });
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
@@ -250,113 +393,212 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
       const newAuxilio = value === 'si' ? VALOR_AUXILIO_TRANSPORTE : 0;
       const salarioPorDia = prev.salario_base / 30;
       const salarioPorDiasTrabajados = salarioPorDia * prev.dias_a_pagar;
-      const pagoNeto = Math.round(salarioPorDiasTrabajados + newAuxilio + prev.valor_total_horas_extras + prev.recargos_nocturnos);
+
+      const totalEmployeeDeductions = (prev.salud_empleado || 0) +
+                                      (prev.pension_empleado || 0) +
+                                      (prev.embargo || 0) +
+                                      (prev.otros_descuentos || 0) +
+                                      (prev.prestamo_empresa || 0) +
+                                      (prev.retencion_en_la_fuente || 0);
+
+      const totalIngresos = salarioPorDiasTrabajados + newAuxilio + prev.valor_total_horas_extras + prev.recargo_nocturno;
+      const pagoNeto = Math.round(totalIngresos - totalEmployeeDeductions);
 
       return { ...prev, auxilio: newAuxilio, pago_neto: pagoNeto };
     });
   };
 
-  const handleHorasExtrasChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value as 'si' | 'no';
-    setRequiereHorasExtras(value);
+  const handleEditHoraExtra = (tipo: string, horas: number) => {
+    setEditHoraExtra(tipo);
+    setEditHorasValue(horas);
+  };
 
-    if (value === 'no') {
-      setHorasExtrasData({
-        'Hora Extra Diurna': 0,
-        'Hora Extra Nocturna': 0,
-        'Hora Extra Diurna en Domingo/Festivo': 0,
-        'Hora Extra Nocturna en Domingo/Festivo': 0,
-      });
-      setFormData(prev => {
-        const salarioPorDia = prev.salario_base / 30;
-        const salarioPorDiasTrabajados = salarioPorDia * prev.dias_a_pagar;
-        const pagoNeto = Math.round(salarioPorDiasTrabajados + prev.auxilio + 0 + prev.recargos_nocturnos);
-        return { ...prev, valor_total_horas_extras: 0, pago_neto: pagoNeto };
-      });
-    } else {
-      setHorasExtrasDialogOpen(true);
+  const handleEditRecargoNocturno = (tipo: string, horas: number) => {
+    setEditRecargoNocturno(tipo);
+    setEditHorasValue(horas);
+  };
+
+  const handleEditDeduccion = (tipo: string, porcentaje: number) => {
+    setEditDeduccion(tipo);
+    setEditDeduccionValue(porcentaje * 100);
+  };
+
+  const handleSaveEditHoraExtra = () => {
+    if (editHoraExtra) {
+      setHorasExtrasData(prev => ({ ...prev, [editHoraExtra]: editHorasValue }));
     }
+    setEditHoraExtra(null);
+    setEditHorasValue(0);
   };
 
-  const handleRecargosNocturnosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value as 'si' | 'no';
-    setRequiereRecargosNocturnos(value);
-
-    if (value === 'no') {
-      setRecargosNocturnosData({
-        'Recargo Nocturno': 0,
-      });
-      setFormData(prev => {
-        const salarioPorDia = prev.salario_base / 30;
-        const salarioPorDiasTrabajados = salarioPorDia * prev.dias_a_pagar;
-        const pagoNeto = Math.round(salarioPorDiasTrabajados + prev.auxilio + prev.valor_total_horas_extras + 0);
-        return { ...prev, recargos_nocturnos: 0, pago_neto: pagoNeto };
-      });
-    } else {
-      setRecargosNocturnosDialogOpen(true);
+  const handleSaveEditRecargoNocturno = () => {
+    if (editRecargoNocturno) {
+      let numValue = editHorasValue;
+      if (numValue > MAX_HORAS_NOCTURNAS_MENSUAL) {
+        numValue = MAX_HORAS_NOCTURNAS_MENSUAL;
+      }
+      setRecargosNocturnosData(prev => ({ ...prev, [editRecargoNocturno]: numValue }));
     }
+    setEditRecargoNocturno(null);
+    setEditHorasValue(0);
   };
 
-  const handleHorasExtrasInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    const numValue = value === '' ? 0 : Number(value);
-    setHorasExtrasData(prev => ({ ...prev, [name]: numValue }));
-  };
-
-  const handleRecargosNocturnosInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    let numValue = value === '' ? 0 : Number(value);
-
-    // Validar que las horas no excedan el máximo mensual
-    if (numValue > MAX_HORAS_NOCTURNAS_MENSUAL) {
-      numValue = MAX_HORAS_NOCTURNAS_MENSUAL;
+  const handleSaveEditDeduccion = () => {
+    if (editDeduccion) {
+      const porcentaje = editDeduccionValue / 100;
+      setDeduccionesData(prev => ({ ...prev, [editDeduccion]: porcentaje }));
     }
-
-    setRecargosNocturnosData(prev => ({ ...prev, [name]: numValue }));
+    setEditDeduccion(null);
+    setEditDeduccionValue(0);
   };
 
-  const handleSaveHorasExtras = () => {
+  const calculateHoraExtraValue = (tipo: string, horas: number) => {
     const salarioPorHora = (formData.salario_base / 30) / 8;
-    let totalHorasExtras = 0;
+    const horaExtra = TIPOS_HORAS_EXTRAS.find(h => h.tipo === tipo);
+    if (horaExtra) {
+      const valorHoraExtra = salarioPorHora * (1 + horaExtra.recargo);
+      return Math.round(horas * valorHoraExtra);
+    }
+    return 0;
+  };
 
-    TIPOS_HORAS_EXTRAS.forEach(({ tipo, recargo }) => {
+  const calculateRecargoNocturnoValue = (tipo: string, horas: number) => {
+    const salarioPorHora = (formData.salario_base / 30) / 8;
+    const recargo = RECARGOS_NOCTURNOS.find(r => r.tipo === tipo);
+    if (recargo) {
+      const valorRecargoNocturno = salarioPorHora * recargo.recargo;
+      return Math.round(horas * valorRecargoNocturno);
+    }
+    return 0;
+  };
+
+  const calculateDeduccionValue = (tipo: string, porcentaje: number) => {
+    const salarioBase = formData.salario_base;
+    return Math.round(salarioBase * porcentaje);
+  };
+
+  const calculateTotalHorasExtrasHoras = () => {
+    return TIPOS_HORAS_EXTRAS.reduce((sum, { tipo }) => {
       const horas = horasExtrasData[tipo] || 0;
-      const valorHoraExtra = salarioPorHora * (1 + recargo);
-      totalHorasExtras += horas * valorHoraExtra;
-    });
-
-    const valorTotalHorasExtras = Math.round(totalHorasExtras);
-
-    setFormData(prev => {
-      const salarioPorDia = prev.salario_base / 30;
-      const salarioPorDiasTrabajados = salarioPorDia * prev.dias_a_pagar;
-      const pagoNeto = Math.round(salarioPorDiasTrabajados + prev.auxilio + valorTotalHorasExtras + prev.recargos_nocturnos);
-      return { ...prev, valor_total_horas_extras: valorTotalHorasExtras, pago_neto: pagoNeto };
-    });
-
-    setHorasExtrasDialogOpen(false);
+      return sum + horas;
+    }, 0);
   };
 
-  const handleSaveRecargosNocturnos = () => {
-    const salarioPorHora = (formData.salario_base / 30) / 8;
-    let totalRecargosNocturnos = 0;
+  const calculateTotalIngresos = () => {
+    const totalHorasExtras = TIPOS_HORAS_EXTRAS.reduce((sum, { tipo }) => {
+      const horas = horasExtrasData[tipo] || 0;
+      return sum + calculateHoraExtraValue(tipo, horas);
+    }, 0);
 
-    RECARGOS_NOCTURNOS.forEach(({ tipo, recargo }) => {
+    const totalRecargosNocturnos = RECARGOS_NOCTURNOS.reduce((sum, { tipo }) => {
       const horas = recargosNocturnosData[tipo] || 0;
-      const valorRecargoNocturno = salarioPorHora * recargo; // Solo el recargo, no la hora completa
-      totalRecargosNocturnos += horas * valorRecargoNocturno;
-    });
+      return sum + calculateRecargoNocturnoValue(tipo, horas);
+    }, 0);
 
-    const valorTotalRecargosNocturnos = Math.round(totalRecargosNocturnos);
+    const salarioPorDia = formData.salario_base / 30;
+    const salarioPorDiasTrabajados = salarioPorDia * formData.dias_a_pagar;
+    return Math.round(salarioPorDiasTrabajados + formData.auxilio + totalHorasExtras + totalRecargosNocturnos);
+  };
 
-    setFormData(prev => {
-      const salarioPorDia = prev.salario_base / 30;
-      const salarioPorDiasTrabajados = salarioPorDia * prev.dias_a_pagar;
-      const pagoNeto = Math.round(salarioPorDiasTrabajados + prev.auxilio + prev.valor_total_horas_extras + valorTotalRecargosNocturnos);
-      return { ...prev, recargos_nocturnos: valorTotalRecargosNocturnos, pago_neto: pagoNeto };
-    });
+  const calculateTotalObligacionEmpleado = () => {
+    const saludEmpleado = calculateDeduccionValue('Salud Empleado', deduccionesData['Salud Empleado']);
+    const pensionEmpleado = calculateDeduccionValue('Pensión Empleado', deduccionesData['Pensión Empleado']);
+    const embargo = calculateDeduccionValue('Embargo', deduccionesData['Embargo']);
+    const otrosDescuentos = calculateDeduccionValue('Otros Descuentos', deduccionesData['Otros Descuentos']);
+    const prestamoEmpresa = calculateDeduccionValue('Préstamo Empresa', deduccionesData['Préstamo Empresa']);
+    const retencionEnLaFuente = calculateDeduccionValue('Retención en la Fuente', deduccionesData['Retención en la Fuente']);
+    
+    return saludEmpleado + pensionEmpleado + embargo + otrosDescuentos + prestamoEmpresa + retencionEnLaFuente;
+  };
 
-    setRecargosNocturnosDialogOpen(false);
+  const calculateTotalObligacionEmpleador = () => {
+    const saludEmpleador = calculateDeduccionValue('Salud Empleador', deduccionesData['Salud Empleador']);
+    const pensionEmpleador = calculateDeduccionValue('Pensión Empleador', deduccionesData['Pensión Empleador']);
+    const senaEmpleador = calculateDeduccionValue('SENA Empleador', deduccionesData['SENA Empleador']);
+    const icbf = calculateDeduccionValue('ICBF', deduccionesData['ICBF']);
+    const cajaCompensacion = calculateDeduccionValue('Caja Compensación Familiar', deduccionesData['Caja Compensación Familiar']);
+    const cesantias = calculateDeduccionValue('Cesantías', deduccionesData['Cesantías']);
+    const primaServicios = calculateDeduccionValue('Prima de Servicios', deduccionesData['Prima de Servicios']);
+    const vacaciones = calculateDeduccionValue('Vacaciones', deduccionesData['Vacaciones']);
+    const riesgosLaborales = calculateDeduccionValue('Riesgos Laborales', deduccionesData['Riesgos Laborales']);
+    
+    return saludEmpleador + pensionEmpleador + senaEmpleador + icbf + cajaCompensacion + cesantias + primaServicios + vacaciones + riesgosLaborales;
+  };
+
+  const handleSaveNovedades = () => {
+    try {
+      const totalHorasExtrasHoras = calculateTotalHorasExtrasHoras();
+
+      const totalHorasExtras = TIPOS_HORAS_EXTRAS.reduce((sum, { tipo }) => {
+        const horas = horasExtrasData[tipo] || 0;
+        return sum + calculateHoraExtraValue(tipo, horas);
+      }, 0);
+
+      const diurnaValue = calculateHoraExtraValue('Diurna', horasExtrasData['Diurna'] || 0);
+      const nocturnaValue = calculateHoraExtraValue('Nocturna', horasExtrasData['Nocturna'] || 0);
+      const diurnaFestivoValue = calculateHoraExtraValue('Diurna en Domingo/Festivo', horasExtrasData['Diurna en Domingo/Festivo'] || 0);
+      const nocturnaFestivoValue = calculateHoraExtraValue('Nocturna en Domingo/Festivo', horasExtrasData['Nocturna en Domingo/Festivo'] || 0);
+
+      const recargoNocturno = calculateRecargoNocturnoValue('Recargo Nocturno', recargosNocturnosData['Recargo Nocturno'] || 0);
+
+      setFormData(prev => {
+        const saludEmpleado = calculateDeduccionValue('Salud Empleado', deduccionesData['Salud Empleado']);
+        const pensionEmpleado = calculateDeduccionValue('Pensión Empleado', deduccionesData['Pensión Empleado']);
+        const embargo = calculateDeduccionValue('Embargo', deduccionesData['Embargo']);
+        const otrosDescuentos = calculateDeduccionValue('Otros Descuentos', deduccionesData['Otros Descuentos']);
+        const prestamoEmpresa = calculateDeduccionValue('Préstamo Empresa', deduccionesData['Préstamo Empresa']);
+        const retencionEnLaFuente = calculateDeduccionValue('Retención en la Fuente', deduccionesData['Retención en la Fuente']);
+        const saludEmpleador = calculateDeduccionValue('Salud Empleador', deduccionesData['Salud Empleador']);
+        const pensionEmpleador = calculateDeduccionValue('Pensión Empleador', deduccionesData['Pensión Empleador']);
+        const senaEmpleador = calculateDeduccionValue('SENA Empleador', deduccionesData['SENA Empleador']);
+        const icbf = calculateDeduccionValue('ICBF', deduccionesData['ICBF']);
+        const cajaCompensacion = calculateDeduccionValue('Caja Compensación Familiar', deduccionesData['Caja Compensación Familiar']);
+        const cesantias = calculateDeduccionValue('Cesantías', deduccionesData['Cesantías']);
+        const primaServicios = calculateDeduccionValue('Prima de Servicios', deduccionesData['Prima de Servicios']);
+        const vacaciones = calculateDeduccionValue('Vacaciones', deduccionesData['Vacaciones']);
+        const riesgosLaborales = calculateDeduccionValue('Riesgos Laborales', deduccionesData['Riesgos Laborales']);
+
+        const totalEmployeeDeductions = saludEmpleado + pensionEmpleado + embargo + otrosDescuentos + prestamoEmpresa + retencionEnLaFuente;
+
+        const salarioPorDia = prev.salario_base / 30;
+        const salarioPorDiasTrabajados = salarioPorDia * prev.dias_a_pagar;
+        const totalIngresos = salarioPorDiasTrabajados + prev.auxilio + totalHorasExtras + recargoNocturno;
+        const pagoNeto = Math.round(totalIngresos - totalEmployeeDeductions);
+
+        return {
+          ...prev,
+          horas_extras: totalHorasExtrasHoras,
+          valor_total_horas_extras: totalHorasExtras,
+          recargo_nocturno: recargoNocturno,
+          recargos_nocturnos: 0,
+          salud_empleado: saludEmpleado,
+          salud_empleador: saludEmpleador,
+          pension_empleado: pensionEmpleado,
+          pension_empleador: pensionEmpleador,
+          sena_empleador: senaEmpleador,
+          ICBF: icbf,
+          caja_compensacion_familiar: cajaCompensacion,
+          cesantias: cesantias,
+          prima_servicios: primaServicios,
+          vacaciones: vacaciones,
+          riesgos_laborales: riesgosLaborales,
+          embargo: embargo,
+          otros_descuentos: otrosDescuentos,
+          prestamo_empresa: prestamoEmpresa,
+          retencion_en_la_fuente: retencionEnLaFuente,
+          pago_neto: pagoNeto,
+          diurna: diurnaValue,
+          nocturna: nocturnaValue,
+          diurna_festivo: diurnaFestivoValue,
+          nocturna_festivo: nocturnaFestivoValue,
+        };
+      });
+
+      setNovedadesDialogOpen(false);
+    } catch (err: any) {
+      console.error('Error al guardar novedades:', err);
+      setError('Error al guardar las novedades. Por favor, intenta de nuevo.');
+    }
   };
 
   const handleSelectChange = async (e: SelectChangeEvent) => {
@@ -387,44 +629,67 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
           setIdTipoContrato(idTipoContratoSeleccionado);
 
           if (
-            idTipoVinculacionSeleccionado === 2 || // contratista
-            idTipoContratoSeleccionado === 3 ||    // Contrato por Prestación de Servicios
-            idTipoContratoSeleccionado === 5       // Contrato de Aprendizaje
+            idTipoVinculacionSeleccionado === 2 ||
+            idTipoContratoSeleccionado === 3 ||
+            idTipoContratoSeleccionado === 5
           ) {
-            setRequiereAuxilio('no');
-            setRequiereHorasExtras('no');
-            setRequiereRecargosNocturnos('no');
             setHorasExtrasData({
-              'Hora Extra Diurna': 0,
-              'Hora Extra Nocturna': 0,
-              'Hora Extra Diurna en Domingo/Festivo': 0,
-              'Hora Extra Nocturna en Domingo/Festivo': 0,
+              'Diurna': 0,
+              'Nocturna': 0,
+              'Diurna en Domingo/Festivo': 0,
+              'Nocturna en Domingo/Festivo': 0,
             });
             setRecargosNocturnosData({
               'Recargo Nocturno': 0,
             });
 
             setFormData(prev => {
+              const saludEmpleado = salarioNumerico * 0.04;
+              const pensionEmpleado = salarioNumerico * 0.04;
+              const totalEmployeeDeductions = saludEmpleado + pensionEmpleado;
               const salarioPorDia = salarioNumerico / 30;
               const salarioPorDiasTrabajados = salarioPorDia * prev.dias_a_pagar;
-              const pagoNeto = Math.round(salarioPorDiasTrabajados);
+              const totalIngresos = salarioPorDiasTrabajados + prev.auxilio;
+              const pagoNeto = Math.round(totalIngresos - totalEmployeeDeductions);
               return {
                 ...prev,
                 salario_base: salarioNumerico,
-                auxilio: 0,
+                auxilio: prev.auxilio,
                 valor_total_horas_extras: 0,
-                recargos_nocturnos: 0,
+                horas_extras: 0,
+                recargo_nocturno: 0,
+                salud_empleado: saludEmpleado,
+                pension_empleado: pensionEmpleado,
+                embargo: 0,
+                otros_descuentos: 0,
+                prestamo_empresa: 0,
+                retencion_en_la_fuente: 0,
                 pago_neto: pagoNeto,
+                diurna: 0,
+                nocturna: 0,
+                diurna_festivo: 0,
+                nocturna_festivo: 0,
               };
             });
           } else {
             setFormData(prev => {
+              const saludEmpleado = salarioNumerico * 0.04;
+              const pensionEmpleado = salarioNumerico * 0.04;
+              const totalEmployeeDeductions = saludEmpleado +
+                                              pensionEmpleado +
+                                              (prev.embargo || 0) +
+                                              (prev.otros_descuentos || 0) +
+                                              (prev.prestamo_empresa || 0) +
+                                              (prev.retencion_en_la_fuente || 0);
               const salarioPorDia = salarioNumerico / 30;
               const salarioPorDiasTrabajados = salarioPorDia * prev.dias_a_pagar;
-              const pagoNeto = Math.round(salarioPorDiasTrabajados + prev.auxilio + prev.valor_total_horas_extras + prev.recargos_nocturnos);
+              const totalIngresos = salarioPorDiasTrabajados + prev.auxilio + prev.valor_total_horas_extras + prev.recargo_nocturno;
+              const pagoNeto = Math.round(totalIngresos - totalEmployeeDeductions);
               return {
                 ...prev,
                 salario_base: salarioNumerico,
+                salud_empleado: saludEmpleado,
+                pension_empleado: pensionEmpleado,
                 pago_neto: pagoNeto,
               };
             });
@@ -447,22 +712,58 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
       dias_a_pagar: 30,
       auxilio: 0,
       valor_total_horas_extras: 0,
+      horas_extras: 0,
       recargos_nocturnos: 0,
+      recargo_nocturno: 0,
       pago_neto: 0,
       id_contrato: 0,
-      id_tipo_pago: 0
+      id_tipo_pago: 0,
+      salud_empleado: 0,
+      pension_empleado: 0,
+      embargo: 0,
+      otros_descuentos: 0,
+      prestamo_empresa: 0,
+      retencion_en_la_fuente: 0,
+      salud_empleador: 0,
+      pension_empleador: 0,
+      sena_empleador: 0,
+      ICBF: 0,
+      caja_compensacion_familiar: 0,
+      cesantias: 0,
+      prima_servicios: 0,
+      vacaciones: 0,
+      riesgos_laborales: 0,
+      diurna: 0,
+      nocturna: 0,
+      diurna_festivo: 0,
+      nocturna_festivo: 0,
     });
     setRequiereAuxilio('no');
-    setRequiereHorasExtras('no');
-    setRequiereRecargosNocturnos('no');
     setHorasExtrasData({
-      'Hora Extra Diurna': 0,
-      'Hora Extra Nocturna': 0,
-      'Hora Extra Diurna en Domingo/Festivo': 0,
-      'Hora Extra Nocturna en Domingo/Festivo': 0,
+      'Diurna': 0,
+      'Nocturna': 0,
+      'Diurna en Domingo/Festivo': 0,
+      'Nocturna en Domingo/Festivo': 0,
     });
     setRecargosNocturnosData({
       'Recargo Nocturno': 0,
+    });
+    setDeduccionesData({
+      'Salud Empleado': 0.04,
+      'Salud Empleador': 0.085,
+      'Pensión Empleado': 0.04,
+      'Pensión Empleador': 0.12,
+      'SENA Empleador': 0.02,
+      'ICBF': 0.03,
+      'Caja Compensación Familiar': 0.04,
+      'Cesantías': 0.0833,
+      'Prima de Servicios': 0.0833,
+      'Vacaciones': 0.0417,
+      'Riesgos Laborales': 0,
+      'Embargo': 0,
+      'Otros Descuentos': 0,
+      'Préstamo Empresa': 0,
+      'Retención en la Fuente': 0,
     });
     setIdTipoVinculacion(null);
     setIdTipoContrato(null);
@@ -473,10 +774,55 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
 
   const handleOpenEditDialog = async (detalle: PlanillaDetalleData) => {
     setFormMode('editar');
-    setFormData({ ...detalle });
+    setFormData({
+      ...detalle,
+      diurna: detalle.diurna || 0,
+      nocturna: detalle.nocturna || 0,
+      diurna_festivo: detalle.diurna_festivo || 0,
+      nocturna_festivo: detalle.nocturna_festivo || 0,
+      horas_extras: detalle.horas_extras || 0,
+    });
     setRequiereAuxilio(detalle.auxilio > 0 ? 'si' : 'no');
-    setRequiereHorasExtras(detalle.valor_total_horas_extras > 0 ? 'si' : 'no');
-    setRequiereRecargosNocturnos(detalle.recargos_nocturnos > 0 ? 'si' : 'no');
+
+    const salarioPorHora = (detalle.salario_base / 30) / 8;
+    const getHorasFromValue = (tipo: string, valor: number) => {
+      const horaExtra = TIPOS_HORAS_EXTRAS.find(h => h.tipo === tipo);
+      if (horaExtra && valor > 0) {
+        const valorHoraExtra = salarioPorHora * (1 + horaExtra.recargo);
+        return Math.round(valor / valorHoraExtra);
+      }
+      return 0;
+    };
+
+    setHorasExtrasData({
+      'Diurna': getHorasFromValue('Diurna', detalle.diurna || 0),
+      'Nocturna': getHorasFromValue('Nocturna', detalle.nocturna || 0),
+      'Diurna en Domingo/Festivo': getHorasFromValue('Diurna en Domingo/Festivo', detalle.diurna_festivo || 0),
+      'Nocturna en Domingo/Festivo': getHorasFromValue('Nocturna en Domingo/Festivo', detalle.nocturna_festivo || 0),
+    });
+
+    setRecargosNocturnosData({
+      'Recargo Nocturno': detalle.recargo_nocturno ? Math.ceil(detalle.recargo_nocturno / calculateRecargoNocturnoValue('Recargo Nocturno', 1)) : 0,
+    });
+
+    setDeduccionesData({
+      'Salud Empleado': detalle.salud_empleado ? detalle.salud_empleado / detalle.salario_base : 0.04,
+      'Salud Empleador': detalle.salud_empleador ? detalle.salud_empleador / detalle.salario_base : 0.085,
+      'Pensión Empleado': detalle.pension_empleado ? detalle.pension_empleado / detalle.salario_base : 0.04,
+      'Pensión Empleador': detalle.pension_empleador ? detalle.pension_empleador / detalle.salario_base : 0.12,
+      'SENA Empleador': detalle.sena_empleador ? detalle.sena_empleador / detalle.salario_base : 0.02,
+      'ICBF': detalle.ICBF ? detalle.ICBF / detalle.salario_base : 0.03,
+      'Caja Compensación Familiar': detalle.caja_compensacion_familiar ? detalle.caja_compensacion_familiar / detalle.salario_base : 0.04,
+      'Cesantías': detalle.cesantias ? detalle.cesantias / detalle.salario_base : 0.0833,
+      'Prima de Servicios': detalle.prima_servicios ? detalle.prima_servicios / detalle.salario_base : 0.0833,
+      'Vacaciones': detalle.vacaciones ? detalle.vacaciones / detalle.salario_base : 0.0417,
+      'Riesgos Laborales': detalle.riesgos_laborales ? detalle.riesgos_laborales / detalle.salario_base : 0,
+      'Embargo': detalle.embargo ? detalle.embargo / detalle.salario_base : 0,
+      'Otros Descuentos': detalle.otros_descuentos ? detalle.otros_descuentos / detalle.salario_base : 0,
+      'Préstamo Empresa': detalle.prestamo_empresa ? detalle.prestamo_empresa / detalle.salario_base : 0,
+      'Retención en la Fuente': detalle.retencion_en_la_fuente ? detalle.retencion_en_la_fuente / detalle.salario_base : 0,
+    });
+
     fetchCatalogosDetalle();
     if (detalle.id_persona) {
       fetchContratosPorPersona(detalle.id_persona);
@@ -518,20 +864,44 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
         return;
       }
 
-      const { valor_total_horas_extras, ...restOfFormData } = formData;
-
       const payload = {
         cliente_id: clienteId,
         action: formMode === 'editar' ? 'modificar' : 'crear',
-        ...restOfFormData,
-        horas_extras: valor_total_horas_extras,
+        id: formMode === 'editar' ? formData.id : undefined,
+        id_planilla: formData.id_planilla,
+        id_persona: formData.id_persona,
+        salario_base: formData.salario_base,
+        dias_a_pagar: formData.dias_a_pagar,
+        auxilio: formData.auxilio,
+        valor_total_horas_extras: formData.valor_total_horas_extras,
+        horas_extras: formData.horas_extras,
+        recargo_nocturno: formData.recargo_nocturno,
+        recargos_nocturnos: formData.recargos_nocturnos,
+        pago_neto: formData.pago_neto,
+        id_contrato: formData.id_contrato,
+        id_tipo_pago: formData.id_tipo_pago,
+        salud_empleado: formData.salud_empleado,
+        salud_empleador: formData.salud_empleador,
+        pension_empleado: formData.pension_empleado,
+        pension_empleador: formData.pension_empleador,
+        sena_empleador: formData.sena_empleador,
+        ICBF: formData.ICBF,
+        caja_compensacion_familiar: formData.caja_compensacion_familiar,
+        cesantias: formData.cesantias,
+        prima_servicios: formData.prima_servicios,
+        vacaciones: formData.vacaciones,
+        riesgos_laborales: formData.riesgos_laborales,
+        embargo: formData.embargo,
+        otros_descuentos: formData.otros_descuentos,
+        prestamo_empresa: formData.prestamo_empresa,
+        retencion_en_la_fuente: formData.retencion_en_la_fuente,
+        diurna: formData.diurna,
+        nocturna: formData.nocturna,
+        diurna_festivo: formData.diurna_festivo,
+        nocturna_festivo: formData.nocturna_festivo,
       };
 
-      console.log("Enviando payload de detalle a API:", JSON.stringify(payload, null, 2));
-
       const response = await axios.post(PLANILLA_DETALLE_API_URL, payload);
-
-      console.log("Respuesta recibida:", response.data);
 
       if (response.status === 200 || response.status === 201) {
         setSuccess(formMode === 'editar' ? 'Detalle actualizado exitosamente' : 'Detalle creado exitosamente');
@@ -540,7 +910,6 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
       }
     } catch (err: any) {
       console.error('Error al guardar detalle:', err);
-      console.error('Detalles del error:', err.response?.data || 'No hay detalles disponibles');
       setError(err.response?.data?.error || `Error al ${formMode === 'editar' ? 'actualizar' : 'crear'} el detalle`);
     } finally {
       setLoading(false);
@@ -572,15 +941,16 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
-      minimumFractionDigits: 0
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(amount);
   };
 
   const puedeRecibirAuxilioHorasExtrasRecargos = () => {
     return (
-      idTipoVinculacion !== 2 &&      // No es "contratista"
-      idTipoContrato !== 3 &&         // No es "Contrato por Prestación de Servicios"
-      idTipoContrato !== 5            // No es "Contrato de Aprendizaje"
+      idTipoVinculacion !== 2 &&
+      idTipoContrato !== 3 &&
+      idTipoContrato !== 5
     );
   };
 
@@ -614,50 +984,56 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell>ID</TableCell>
                 <TableCell>Empleado</TableCell>
-                <TableCell>Contrato</TableCell>
                 <TableCell>Tipo de Pago</TableCell>
                 <TableCell align="right">Salario Base</TableCell>
                 <TableCell align="right">Días a Pagar</TableCell>
                 <TableCell align="right">Auxilio</TableCell>
-                <TableCell align="right">Total a Pagar de Horas Extras</TableCell>
-                <TableCell align="right">Recargos Nocturnos</TableCell>
+                <TableCell align="right">Horas Extras</TableCell>
+                <TableCell align="right">Recargo Noc.</TableCell>
+                <TableCell align="right">Total Deducciones</TableCell>
                 <TableCell align="right">Pago Neto</TableCell>
                 <TableCell align="right">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {planillaDetalles.map((detalle) => (
-                <TableRow key={detalle.id}>
-                  <TableCell>{detalle.id}</TableCell>
-                  <TableCell>{detalle.nombre_completo || `ID: ${detalle.id_persona}`}</TableCell>
-                  <TableCell>{detalle.contrato_nombre || `ID: ${detalle.id_contrato}`}</TableCell>
-                  <TableCell>{detalle.tipo_pago_nombre || `ID: ${detalle.id_tipo_pago}`}</TableCell>
-                  <TableCell align="right">{formatMoney(detalle.salario_base)}</TableCell>
-                  <TableCell align="right">{detalle.dias_a_pagar}</TableCell>
-                  <TableCell align="right">{formatMoney(detalle.auxilio)}</TableCell>
-                  <TableCell align="right">{formatMoney(detalle.valor_total_horas_extras)}</TableCell>
-                  <TableCell align="right">{formatMoney(detalle.recargos_nocturnos)}</TableCell>
-                  <TableCell align="right">{formatMoney(detalle.pago_neto)}</TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      color="primary"
-                      onClick={() => handleOpenEditDialog(detalle)}
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => detalle.id && handleDeleteDetalle(detalle.id)}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {planillaDetalles.map((detalle) => {
+                const totalEmployeeDeductions = (detalle.salud_empleado || 0) +
+                                                (detalle.pension_empleado || 0) +
+                                                (detalle.embargo || 0) +
+                                                (detalle.otros_descuentos || 0) +
+                                                (detalle.prestamo_empresa || 0) +
+                                                (detalle.retencion_en_la_fuente || 0);
+                return (
+                  <TableRow key={detalle.id}>
+                    <TableCell>{detalle.nombre_completo || `ID: ${detalle.id_persona}`}</TableCell>
+                    <TableCell>{detalle.tipo_pago_nombre || `ID: ${detalle.id_tipo_pago}`}</TableCell>
+                    <TableCell align="right">{formatMoney(detalle.salario_base)}</TableCell>
+                    <TableCell align="right">{detalle.dias_a_pagar}</TableCell>
+                    <TableCell align="right">{formatMoney(detalle.auxilio)}</TableCell>
+                    <TableCell align="right">{detalle.horas_extras}</TableCell>
+                    <TableCell align="right">{formatMoney(detalle.recargo_nocturno || 0)}</TableCell>
+                    <TableCell align="right">{formatMoney(totalEmployeeDeductions)}</TableCell>
+                    <TableCell align="right">{formatMoney(detalle.pago_neto)}</TableCell>
+                    <TableCell align="right">
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => handleOpenEditDialog(detalle)}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => detalle.id && handleDeleteDetalle(detalle.id)}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>
@@ -791,25 +1167,46 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
             )}
 
             {puedeRecibirAuxilioHorasExtrasRecargos() && (
-              <FormControl component="fieldset" sx={{ gridColumn: '1 / span 2', my: 1 }}>
-                <FormLabel component="legend">¿El empleado trabajó horas extras?</FormLabel>
-                <RadioGroup
-                  row
-                  name="requiere_horas_extras"
-                  value={requiereHorasExtras}
-                  onChange={handleHorasExtrasChange}
+              <Box sx={{ gridColumn: '1 / span 2', my: 1 }}>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<EventNoteIcon />}
+                  onClick={() => setNovedadesDialogOpen(true)}
                 >
-                  <FormControlLabel value="si" control={<Radio />} label="Sí" />
-                  <FormControlLabel value="no" control={<Radio />} label="No" />
-                </RadioGroup>
-              </FormControl>
+                  Novedades
+                </Button>
+              </Box>
             )}
 
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                label="Horas Extras"
+                name="valor_total_horas_extras"
+                type="number"
+                value={formData.valor_total_horas_extras}
+                fullWidth
+                variant="outlined"
+                disabled
+                InputProps={{
+                  startAdornment: '$',
+                }}
+              />
+              <TextField
+                label="Total Horas"
+                type="number"
+                value={calculateTotalHorasExtrasHoras()}
+                fullWidth
+                variant="outlined"
+                disabled
+              />
+            </Box>
+
             <TextField
-              label="Total a Pagar de Horas Extras"
-              name="valor_total_horas_extras"
+              label="Recargo Nocturno"
+              name="recargo_nocturno"
               type="number"
-              value={formData.valor_total_horas_extras}
+              value={formData.recargo_nocturno}
               fullWidth
               variant="outlined"
               disabled
@@ -818,26 +1215,22 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
               }}
             />
 
-            {puedeRecibirAuxilioHorasExtrasRecargos() && (
-              <FormControl component="fieldset" sx={{ gridColumn: '1 / span 2', my: 1 }}>
-                <FormLabel component="legend">¿El empleado trabajó en horario nocturno?</FormLabel>
-                <RadioGroup
-                  row
-                  name="requiere_recargos_nocturnos"
-                  value={requiereRecargosNocturnos}
-                  onChange={handleRecargosNocturnosChange}
-                >
-                  <FormControlLabel value="si" control={<Radio />} label="Sí" />
-                  <FormControlLabel value="no" control={<Radio />} label="No" />
-                </RadioGroup>
-              </FormControl>
-            )}
+            <TextField
+              label="Total Pago"
+              type="number"
+              value={calculateTotalIngresos()}
+              fullWidth
+              variant="outlined"
+              disabled
+              InputProps={{
+                startAdornment: '$',
+              }}
+            />
 
             <TextField
-              label="Recargos Nocturnos"
-              name="recargos_nocturnos"
+              label="Deducciones (Obligación Empleado)"
               type="number"
-              value={formData.recargos_nocturnos}
+              value={calculateTotalObligacionEmpleado()}
               fullWidth
               variant="outlined"
               disabled
@@ -872,103 +1265,360 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
         </DialogActions>
       </Dialog>
 
-      <Dialog open={horasExtrasDialogOpen} onClose={() => setHorasExtrasDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Liquidar Horas Extras</DialogTitle>
+      <Dialog open={novedadesDialogOpen} onClose={() => setNovedadesDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Novedades</DialogTitle>
         <DialogContent>
-          <TableContainer component={Paper}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Tipo de Hora Extra</TableCell>
-                  <TableCell>Horario</TableCell>
-                  <TableCell>Recargo (%)</TableCell>
-                  <TableCell>Cantidad de Horas</TableCell>
-                  <TableCell>Descripción</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {TIPOS_HORAS_EXTRAS.map(({ tipo, horario, recargo, descripcion }) => (
-                  <TableRow key={tipo}>
-                    <TableCell>{tipo}</TableCell>
-                    <TableCell>{horario}</TableCell>
-                    <TableCell>{recargo}</TableCell>
-                    <TableCell>
-                      <TextField
-                        name={tipo}
-                        type="number"
-                        value={horasExtrasData[tipo] || 0}
-                        onChange={handleHorasExtrasInputChange}
-                        variant="outlined"
-                        size="small"
-                        inputProps={{ min: 0 }}
-                      />
-                    </TableCell>
-                    <TableCell>{descripcion}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)} centered>
+            <Tab label="Ingresos" />
+            <Tab label="Deducciones" />
+          </Tabs>
+
+          {tabValue === 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Box sx={{ 
+                background: 'linear-gradient(45deg, #e3f2fd 30%, #bbdefb 90%)', 
+                p: 2, 
+                borderRadius: 2, 
+                mb: 2, 
+                borderBottom: '2px solid #1976d2' 
+              }}>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+                  Horas Extras
+                </Typography>
+              </Box>
+              <Grid container spacing={2}>
+                {TIPOS_HORAS_EXTRAS.map(({ tipo, horario, recargo, descripcion }) => {
+                  const horas = horasExtrasData[tipo] || 0;
+                  const valor = calculateHoraExtraValue(tipo, horas);
+                  const tooltipContent = `Descripción: ${descripcion}\nHorario: ${horario}\nRecargo: ${(recargo * 100).toFixed(0)}%`;
+                  return (
+                    <Grid item xs={12} sm={6} md={4} key={tipo}>
+                      <Card sx={{ 
+                        minHeight: 180, 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        justifyContent: 'space-between',
+                        boxShadow: 3,
+                        border: '1px solid #e0e0e0',
+                        borderRadius: 2,
+                        transition: 'transform 0.2s',
+                        '&:hover': {
+                          transform: 'scale(1.02)',
+                        }
+                      }}>
+                        <Box
+                          sx={{
+                            background: 'linear-gradient(45deg, #42a5f5 30%, #1976d2 90%)',
+                            color: 'white',
+                            p: 2,
+                            borderTopLeftRadius: 8,
+                            borderTopRightRadius: 8,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Typography 
+                            variant="h6" 
+                            sx={{ 
+                              fontSize: tipo.length > 15 ? '1rem' : '1.25rem', 
+                              whiteSpace: 'nowrap', 
+                              overflow: 'hidden', 
+                              textOverflow: 'ellipsis' 
+                            }}
+                          >
+                            {tipo}
+                          </Typography>
+                          <Tooltip title={tooltipContent} arrow>
+                            <IconButton sx={{ color: 'white' }}>
+                              <InfoIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                        <CardContent>
+                          <Typography variant="body2" color="textSecondary">Horas: {horas}</Typography>
+                          <Typography variant="body2" color="textSecondary">Valor: {formatMoney(valor)}</Typography>
+                        </CardContent>
+                        <CardActions sx={{ justifyContent: 'flex-end' }}>
+                          <IconButton onClick={() => handleEditHoraExtra(tipo, horas)}>
+                            <EditIcon />
+                          </IconButton>
+                        </CardActions>
+                      </Card>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+
+              <Box sx={{ 
+                background: 'linear-gradient(45deg, #e3f2fd 30%, #bbdefb 90%)', 
+                p: 2, 
+                borderRadius: 2, 
+                mb: 2, 
+                mt: 3, 
+                borderBottom: '2px solid #1976d2' 
+              }}>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+                  Recargos Nocturnos
+                </Typography>
+              </Box>
+              <Grid container spacing={2}>
+                {RECARGOS_NOCTURNOS.map(({ tipo, horario, recargo, descripcion }) => {
+                  const horas = recargosNocturnosData[tipo] || 0;
+                  const valor = calculateRecargoNocturnoValue(tipo, horas);
+                  const tooltipContent = `Descripción: ${descripcion}\nHorario: ${horario}\nRecargo: ${(recargo * 100).toFixed(0)}%`;
+                  return (
+                    <Grid item xs={12} sm={6} md={4} key={tipo}>
+                      <Card sx={{ 
+                        minHeight: 180, 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        justifyContent: 'space-between',
+                        boxShadow: 3,
+                        border: '1px solid #e0e0e0',
+                        borderRadius: 2,
+                        transition: 'transform 0.2s',
+                        '&:hover': {
+                          transform: 'scale(1.02)',
+                        }
+                      }}>
+                        <Box
+                          sx={{
+                            background: 'linear-gradient(45deg, #42a5f5 30%, #1976d2 90%)',
+                            color: 'white',
+                            p: 2,
+                            borderTopLeftRadius: 8,
+                            borderTopRightRadius: 8,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Typography 
+                            variant="h6" 
+                            sx={{ 
+                              fontSize: tipo.length > 15 ? '1rem' : '1.25rem', 
+                              whiteSpace: 'nowrap', 
+                              overflow: 'hidden', 
+                              textOverflow: 'ellipsis' 
+                            }}
+                          >
+                            {tipo}
+                          </Typography>
+                          <Tooltip title={tooltipContent} arrow>
+                            <IconButton sx={{ color: 'white' }}>
+                              <InfoIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                        <CardContent>
+                          <Typography variant="body2" color="textSecondary">Horas: {horas}</Typography>
+                          <Typography variant="body2" color="textSecondary">Valor: {formatMoney(valor)}</Typography>
+                        </CardContent>
+                        <CardActions sx={{ justifyContent: 'flex-end' }}>
+                          <IconButton onClick={() => handleEditRecargoNocturno(tipo, horas)}>
+                            <EditIcon />
+                          </IconButton>
+                        </CardActions>
+                      </Card>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+
+              <Box sx={{ mt: 3, p: 2, bgcolor: '#e0f7fa', borderRadius: 1 }}>
+                <Typography variant="h6">Total Ingresos: {formatMoney(calculateTotalIngresos())}</Typography>
+              </Box>
+            </Box>
+          )}
+
+          {tabValue === 1 && (
+            <Box sx={{ mt: 2 }}>
+              <Box sx={{ 
+                background: 'linear-gradient(45deg, #ffebee 30%, #ffcdd2 90%)', 
+                p: 2, 
+                borderRadius: 2, 
+                mb: 2, 
+                borderBottom: '2px solid #d32f2f' 
+              }}>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>
+                  Deducciones
+                </Typography>
+              </Box>
+              <Grid container spacing={2}>
+                {DEDUCCIONES.map(({ tipo, porcentaje, descripcion, editable }) => {
+                  const porcentajeActual = deduccionesData[tipo] || porcentaje;
+                  const valor = calculateDeduccionValue(tipo, porcentajeActual);
+                  const tooltipContent = `Descripción: ${descripcion}\nPorcentaje: ${(porcentajeActual * 100).toFixed(2)}%`;
+                  return (
+                    <Grid item xs={12} sm={6} md={4} key={tipo}>
+                      <Card sx={{ 
+                        minHeight: 180, 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        justifyContent: 'space-between',
+                        boxShadow: 3,
+                        border: '1px solid #e0e0e0',
+                        borderRadius: 2,
+                        transition: 'transform 0.2s',
+                        '&:hover': {
+                          transform: 'scale(1.02)',
+                        }
+                      }}>
+                        <Box
+                          sx={{
+                            background: 'linear-gradient(45deg, #ef5350 30%, #d32f2f 90%)',
+                            color: 'white',
+                            p: 2,
+                            borderTopLeftRadius: 8,
+                            borderTopRightRadius: 8,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Typography 
+                            variant="h6" 
+                            sx={{ 
+                              fontSize: tipo.length > 15 ? '1rem' : '1.25rem', 
+                              whiteSpace: 'nowrap', 
+                              overflow: 'hidden', 
+                              textOverflow: 'ellipsis' 
+                            }}
+                          >
+                            {tipo}
+                          </Typography>
+                          <Tooltip title={tooltipContent} arrow>
+                            <IconButton sx={{ color: 'white' }}>
+                              <InfoIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                        <CardContent>
+                          <Typography variant="body2" color="textSecondary">Porcentaje: {(porcentajeActual * 100).toFixed(2)}%</Typography>
+                          <Typography variant="body2" color="textSecondary">Valor: {formatMoney(valor)}</Typography>
+                        </CardContent>
+                        <CardActions sx={{ justifyContent: 'flex-end' }}>
+                          {editable ? (
+                            <IconButton onClick={() => handleEditDeduccion(tipo, porcentajeActual)}>
+                              <EditIcon />
+                            </IconButton>
+                          ) : (
+                            <IconButton disabled>
+                              <EditIcon />
+                            </IconButton>
+                          )}
+                        </CardActions>
+                      </Card>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+
+              <Box sx={{ mt: 3, p: 2, bgcolor: '#ffebee', borderRadius: 1 }}>
+                <Typography variant="h6">Total Obligación Empleado: {formatMoney(calculateTotalObligacionEmpleado())}</Typography>
+                <Typography variant="h6" sx={{ mt: 1 }}>Total Obligación Empleador: {formatMoney(calculateTotalObligacionEmpleador())}</Typography>
+              </Box>
+            </Box>
+          )}
+
+          <Box sx={{ mt: 3, p: 2, bgcolor: '#f1f8e9', borderRadius: 1 }}>
+            <Typography variant="h6">
+              Total Novedades: {formatMoney(calculateTotalIngresos() - calculateTotalObligacionEmpleado())}
+            </Typography>
+          </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setHorasExtrasDialogOpen(false)} color="inherit">Cancelar</Button>
-          <Button onClick={handleSaveHorasExtras} color="primary" variant="contained">
+          <Button onClick={() => setNovedadesDialogOpen(false)} color="inherit">
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleSaveNovedades}
+            color="primary"
+            variant="contained"
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Guardar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!editHoraExtra} onClose={() => setEditHoraExtra(null)}>
+        <DialogTitle>Editar Horas Extras - {editHoraExtra}</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Horas"
+            type="number"
+            value={editHorasValue}
+            onChange={(e) => setEditHorasValue(Number(e.target.value))}
+            fullWidth
+            variant="outlined"
+            sx={{ mt: 2 }}
+            InputProps={{ inputProps: { min: 0 } }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditHoraExtra(null)} color="inherit">
+            Cancelar
+          </Button>
+          <Button onClick={handleSaveEditHoraExtra} color="primary" variant="contained">
             Guardar
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={recargosNocturnosDialogOpen} onClose={() => setRecargosNocturnosDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Liquidar Recargos Nocturnos</DialogTitle>
+      <Dialog open={!!editRecargoNocturno} onClose={() => setEditRecargoNocturno(null)}>
+        <DialogTitle>Editar Recargo Nocturno - {editRecargoNocturno}</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-            Nota: Ingrese solo las horas nocturnas que no sean horas extras. Las horas extras nocturnas deben ingresarse en el formulario de horas extras.
-          </Typography>
-          <TableContainer component={Paper}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Concepto</TableCell>
-                  <TableCell>Horario</TableCell>
-                  <TableCell>Recargo (%)</TableCell>
-                  <TableCell>Cantidad de Horas</TableCell>
-                  <TableCell>Descripción</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {RECARGOS_NOCTURNOS.map(({ tipo, horario, recargo, descripcion }) => (
-                  <TableRow key={tipo}>
-                    <TableCell>{tipo}</TableCell>
-                    <TableCell>{horario}</TableCell>
-                    <TableCell>{recargo * 100}%</TableCell>
-                    <TableCell>
-                      <TextField
-                        name={tipo}
-                        type="number"
-                        value={recargosNocturnosData[tipo] || 0}
-                        onChange={handleRecargosNocturnosInputChange}
-                        variant="outlined"
-                        size="small"
-                        inputProps={{ min: 0, max: MAX_HORAS_NOCTURNAS_MENSUAL }}
-                        helperText={`Máximo ${MAX_HORAS_NOCTURNAS_MENSUAL} horas al mes (${MAX_HORAS_NOCTURNAS_POR_DIA} horas por día)`}
-                      />
-                    </TableCell>
-                    <TableCell>{descripcion}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <TextField
+            label="Horas"
+            type="number"
+            value={editHorasValue}
+            onChange={(e) => setEditHorasValue(Number(e.target.value))}
+            fullWidth
+            variant="outlined"
+            sx={{ mt: 2 }}
+            InputProps={{ inputProps: { min: 0, max: MAX_HORAS_NOCTURNAS_MENSUAL } }}
+            helperText={`Máximo ${MAX_HORAS_NOCTURNAS_MENSUAL} horas al mes (${MAX_HORAS_NOCTURNAS_POR_DIA} horas por día)`}
+          />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRecargosNocturnosDialogOpen(false)} color="inherit">Cancelar</Button>
-          <Button onClick={handleSaveRecargosNocturnos} color="primary" variant="contained">
-            Guardar
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
-  );
-};
+            <Button onClick={() => setEditRecargoNocturno(null)} color="inherit">
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveEditRecargoNocturno} color="primary" variant="contained">
+              Guardar
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-export default PlanillaDetalle;
+        {/* Dialog for Editing Deducciones */}
+        <Dialog open={!!editDeduccion} onClose={() => setEditDeduccion(null)}>
+          <DialogTitle>Editar Deducción - {editDeduccion}</DialogTitle>
+          <DialogContent>
+            <TextField
+              label="Porcentaje (%)"
+              type="number"
+              value={editDeduccionValue}
+              onChange={(e) => setEditDeduccionValue(Number(e.target.value))}
+              fullWidth
+              variant="outlined"
+              sx={{ mt: 2 }}
+              InputProps={{ inputProps: { min: 0, max: 100, step: 0.01 } }}
+              helperText="Ingrese el porcentaje (0-100)"
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEditDeduccion(null)} color="inherit">
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveEditDeduccion} color="primary" variant="contained">
+              Guardar
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    );
+  };
+
+  export default PlanillaDetalle;
