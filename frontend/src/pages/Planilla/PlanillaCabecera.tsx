@@ -22,6 +22,35 @@ interface PlanillaData {
   fecha_final: string;
   id_periodicidad: number;
   periodicidad_nombre?: string;
+  // Añadidos para los nuevos totales
+  total_personas?: number;
+  total_pago_neto?: number;
+  total_deducciones_empleado?: number;
+  total_deducciones_empleador?: number;
+  [key: string]: any;
+}
+
+interface PlanillaDetalleData {
+  id: number;
+  id_planilla: number;
+  id_persona: number;
+  pago_neto: number;
+  salud_empleado: number;
+  pension_empleado: number;
+  retencion_en_la_fuente: number;
+  embargo: number;
+  otros_descuentos: number;
+  prestamo_empresa: number;
+  salud_empleador: number;
+  pension_empleador: number;
+  sena_empleador: number;
+  icbf: number;
+  caja_compensacion_familiar: number;
+  cesantias: number;
+  prima_servicios: number;
+  vacaciones: number;
+  riesgos_laborales: number;
+  nombre_completo: string;
   [key: string]: any;
 }
 
@@ -35,6 +64,7 @@ interface PlanillaCabeceraProps {
 }
 
 const PLANILLA_API_URL = 'https://i8vay3901d.execute-api.us-east-1.amazonaws.com/dev/Crud_planilla';
+const PLANILLA_DETALLE_API_URL = 'https://fp35pmt31d.execute-api.us-east-1.amazonaws.com/dev/crud_planilla_detalle';
 
 const PlanillaCabecera: React.FC<PlanillaCabeceraProps> = ({ clienteId }) => {
   // Estado para la lista de planillas
@@ -69,37 +99,187 @@ const PlanillaCabecera: React.FC<PlanillaCabeceraProps> = ({ clienteId }) => {
   }, [clienteId]);
   
   // Función para cargar las planillas
-  const fetchPlanillas = async () => {
-    if (!clienteId) return;
+ // Función para cargar las planillas con sus totales
+const fetchPlanillas = async () => {
+  if (!clienteId) return;
+  
+  try {
+    setLoading(true);
     
+    // 1. Obtener planillas
+    const planillasPayload = {
+      cliente_id: clienteId,
+      action: 'leer'
+    };
+    
+    console.log("Solicitando planillas para cliente_id:", clienteId);
+    const planillasResponse = await axios.post(PLANILLA_API_URL, planillasPayload);
+    
+    if (!planillasResponse.data || !Array.isArray(planillasResponse.data)) {
+      setError('Formato de respuesta inesperado');
+      setLoading(false);
+      return;
+    }
+    
+    const planillasData = planillasResponse.data;
+    console.log(`Se encontraron ${planillasData.length} planillas`);
+    
+    // 2. Para cada planilla, obtener detalles y calcular totales
+    const planillasConTotales = await Promise.all(
+      planillasData.map(async (planilla) => {
+        if (!planilla.id) return planilla;
+        
+        // Consultar todos los detalles de esta planilla usando id_planilla
+        const detallesPayload = {
+          action: 'leer',
+          cliente_id: clienteId,
+          id_planilla: planilla.id
+        };
+        
+        console.log(`Consultando detalles para planilla ID: ${planilla.id}`);
+        
+        try {
+          const detallesResponse = await axios.post(PLANILLA_DETALLE_API_URL, detallesPayload);
+          const detalles = detallesResponse.data;
+          
+          if (Array.isArray(detalles) && detalles.length > 0) {
+            console.log(`Se encontraron ${detalles.length} detalles para la planilla ${planilla.id}`);
+            
+            // Calcular totales
+            const total_personas = detalles.length;
+            
+            const total_pago_neto = detalles.reduce((sum, item) => 
+              sum + (Number(item.pago_neto) || 0), 0);
+            
+            const total_deducciones_empleado = detalles.reduce((sum, item) => 
+              sum + (Number(item.salud_empleado) || 0) + 
+                    (Number(item.pension_empleado) || 0) + 
+                    (Number(item.embargo) || 0) + 
+                    (Number(item.otros_descuentos) || 0) + 
+                    (Number(item.prestamo_empresa) || 0) + 
+                    (Number(item.retencion_en_la_fuente) || 0), 0);
+            
+            const total_deducciones_empleador = detalles.reduce((sum, item) => 
+              sum + (Number(item.salud_empleador) || 0) + 
+                    (Number(item.pension_empleador) || 0) + 
+                    (Number(item.sena_empleador) || 0) + 
+                    (Number(item.ICBF) || 0) + 
+                    (Number(item.caja_compensacion_familiar) || 0) + 
+                    (Number(item.cesantias) || 0) + 
+                    (Number(item.prima_servicios) || 0) + 
+                    (Number(item.vacaciones) || 0) + 
+                    (Number(item.riesgos_laborales) || 0), 0);
+            
+            console.log(`Totales calculados para planilla ${planilla.id}:`, {
+              total_personas,
+              total_pago_neto,
+              total_deducciones_empleado,
+              total_deducciones_empleador
+            });
+            
+            return {
+              ...planilla,
+              total_personas,
+              total_pago_neto,
+              total_deducciones_empleado,
+              total_deducciones_empleador
+            };
+          }
+        } catch (detailsError) {
+          console.error(`Error al obtener detalles para planilla ${planilla.id}:`, detailsError);
+        }
+        
+        // Si hay errores o no hay datos, devolver planilla sin totales
+        return {
+          ...planilla,
+          total_personas: 0,
+          total_pago_neto: 0,
+          total_deducciones_empleado: 0,
+          total_deducciones_empleador: 0
+        };
+      })
+    );
+    
+    console.log("Planillas con totales calculados:", planillasConTotales);
+    setPlanillas(planillasConTotales);
+    
+  } catch (err: any) {
+    console.error('Error al cargar planillas:', err);
+    setError(err.response?.data?.error || 'Error al cargar las planillas');
+  } finally {
+    setLoading(false);
+  }
+};
+  
+  // Función para obtener los detalles de una planilla
+  const fetchPlanillaDetalles = async (planillaId: number): Promise<PlanillaDetalleData[]> => {
     try {
-      setLoading(true);
-      console.log("Solicitando planillas para cliente_id:", clienteId);
-      
       const payload = {
-        cliente_id: clienteId,
-        action: 'leer'
+        action: 'leer',
+        id: planillaId,
+        cliente_id: clienteId
       };
       
-      console.log("Payload para leer planillas:", payload);
-      
-      const response = await axios.post(PLANILLA_API_URL, payload);
-      console.log("Respuesta de API (planillas):", response.data);
+      const response = await axios.post(PLANILLA_DETALLE_API_URL, payload);
       
       if (response.data && Array.isArray(response.data)) {
-        setPlanillas(response.data);
-        console.log("Planillas cargadas:", response.data.length);
-      } else {
-        console.error('Formato de respuesta inesperado:', response.data);
-        setError('Error al cargar las planillas: formato inesperado');
+        return response.data;
       }
-    } catch (err: any) {
-      console.error('Error al cargar planillas:', err);
-      console.error('Detalles del error:', err.response?.data || 'No hay detalles disponibles');
-      setError(err.response?.data?.error || 'Error al cargar las planillas');
-    } finally {
-      setLoading(false);
+      return [];
+    } catch (err) {
+      console.error(`Error al obtener detalles de planilla ${planillaId}:`, err);
+      return [];
     }
+  };
+  
+  // Función para calcular los totales a partir de los detalles de planilla
+  const calcularTotalesPlanilla = (detalles: PlanillaDetalleData[]) => {
+    if (!detalles || detalles.length === 0) {
+      return {
+        total_personas: 0,
+        total_pago_neto: 0,
+        total_deducciones_empleado: 0,
+        total_deducciones_empleador: 0
+      };
+    }
+    
+    // Total de personas es simplemente la cantidad de registros
+    const total_personas = detalles.length;
+    
+    // Sumar todos los pagos netos
+    const total_pago_neto = detalles.reduce((sum, item) => sum + (item.pago_neto || 0), 0);
+    
+    // Calcular deducciones del empleado
+    const total_deducciones_empleado = detalles.reduce((sum, item) => {
+      return sum + 
+        (item.salud_empleado || 0) + 
+        (item.pension_empleado || 0) + 
+        (item.retencion_en_la_fuente || 0) + 
+        (item.embargo || 0) + 
+        (item.otros_descuentos || 0) + 
+        (item.prestamo_empresa || 0);
+    }, 0);
+    
+    // Calcular deducciones del empleador
+    const total_deducciones_empleador = detalles.reduce((sum, item) => {
+      return sum + 
+        (item.salud_empleador || 0) + 
+        (item.pension_empleador || 0) + 
+        (item.sena_empleador || 0) + 
+        (item.icbf || 0) + 
+        (item.caja_compensacion_familiar || 0) + 
+        (item.cesantias || 0) + 
+        (item.prima_servicios || 0) + 
+        (item.vacaciones || 0) + 
+        (item.riesgos_laborales || 0);
+    }, 0);
+    
+    return {
+      total_personas,
+      total_pago_neto,
+      total_deducciones_empleado,
+      total_deducciones_empleador
+    };
   };
   
   // Función para cargar periodicidades
@@ -291,6 +471,16 @@ const PlanillaCabecera: React.FC<PlanillaCabeceraProps> = ({ clienteId }) => {
     }
   };
   
+  // Formatear números como moneda
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+  
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -322,13 +512,17 @@ const PlanillaCabecera: React.FC<PlanillaCabeceraProps> = ({ clienteId }) => {
                 <TableCell>Fecha Inicial</TableCell>
                 <TableCell>Fecha Final</TableCell>
                 <TableCell>Periodicidad</TableCell>
+                <TableCell>Total Personas</TableCell>
+                <TableCell>Total Pago Neto</TableCell>
+                <TableCell>Total Deducciones Empleado</TableCell>
+                <TableCell>Total Deducciones Empleador</TableCell>
                 <TableCell align="right">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {planillas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">No hay planillas registradas</TableCell>
+                  <TableCell colSpan={10} align="center">No hay planillas registradas</TableCell>
                 </TableRow>
               ) : (
                 planillas.map((planilla) => (
@@ -346,6 +540,10 @@ const PlanillaCabecera: React.FC<PlanillaCabeceraProps> = ({ clienteId }) => {
                       <TableCell>{formatDate(planilla.fecha_inicial)}</TableCell>
                       <TableCell>{formatDate(planilla.fecha_final)}</TableCell>
                       <TableCell>{planilla.periodicidad_nombre}</TableCell>
+                      <TableCell>{planilla.total_personas || 0}</TableCell>
+                      <TableCell>{formatCurrency(planilla.total_pago_neto || 0)}</TableCell>
+                      <TableCell>{formatCurrency(planilla.total_deducciones_empleado || 0)}</TableCell>
+                      <TableCell>{formatCurrency(planilla.total_deducciones_empleador || 0)}</TableCell>
                       <TableCell align="right">
                         <Button 
                           color="primary" 
@@ -370,7 +568,7 @@ const PlanillaCabecera: React.FC<PlanillaCabeceraProps> = ({ clienteId }) => {
                     {/* Fila expandible para detalles de planilla */}
                     {expandedRows[planilla.id || 0] && (
                       <TableRow>
-                        <TableCell colSpan={6} sx={{ p: 0 }}>
+                        <TableCell colSpan={10} sx={{ p: 0 }}>
                           <PlanillaDetalle 
                             clienteId={clienteId} 
                             planillaId={planilla.id || 0} 

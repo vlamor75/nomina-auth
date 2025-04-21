@@ -1318,7 +1318,12 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
               InputProps={{ inputProps: { min: 0, max: 30 } }}
             />
    
-              
+            {!puedeRecibirAuxilioHorasExtrasRecargos() && (
+              <Typography variant="body2" color="textSecondary" sx={{ gridColumn: '1 / span 2', my: 1 }}>
+                Los conceptos de auxilio, horas extras y recargos nocturnos no aplican para este tipo de contrato o vinculación.
+              </Typography>
+            )}
+   
             {puedeRecibirAuxilioHorasExtrasRecargos() && formData.salario_base > 0 && formData.salario_base < UMBRAL_AUXILIO_TRANSPORTE && (
               <FormControl component="fieldset" sx={{ gridColumn: '1 / span 2', my: 1 }}>
                 <FormLabel component="legend">¿El empleado requiere auxilio?</FormLabel>
@@ -1346,16 +1351,18 @@ const PlanillaDetalle: React.FC<PlanillaDetalleProps> = ({ clienteId, planillaId
               />
             )}
    
-            <Box sx={{ gridColumn: '1 / span 2', my: 1 }}>
-              <Button
-                variant="outlined"
-                color="primary"
-                startIcon={<EventNoteIcon />}
-                onClick={() => setNovedadesDialogOpen(true)}
-              >
-                Novedades
-              </Button>
-          </Box>
+            {puedeRecibirAuxilioHorasExtrasRecargos() && (
+              <Box sx={{ gridColumn: '1 / span 2', my: 1 }}>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<EventNoteIcon />}
+                  onClick={() => setNovedadesDialogOpen(true)}
+                >
+                  Novedades
+                </Button>
+              </Box>
+            )}
    
             <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField

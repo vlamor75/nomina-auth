@@ -5,44 +5,10 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Dialog, DialogActions, DialogContent, DialogTitle,
   FormControl, InputLabel, Select, MenuItem, SelectChangeEvent,
-  Tabs, Tab, Chip, InputAdornment, Grid, Tooltip
+  Tabs, Tab, Chip, InputAdornment, Grid
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Search as SearchIcon } from '@mui/icons-material';
 import DashboardLayout from '../components/DashboardLayout';
-
-// Definición de niveles ARL
-const nivelesARL = [
-  {
-    nivel: 1,
-    descripcion: "Riesgo mínimo",
-    porcentaje: "0.522%",
-    ejemplos: "Oficinas administrativas, actividades sin exposición significativa a riesgos físicos, químicos o mecánicos."
-  },
-  {
-    nivel: 2,
-    descripcion: "Riesgo bajo",
-    porcentaje: "1.044%",
-    ejemplos: "Comercio minorista, servicios generales como limpieza o mantenimiento básico."
-  },
-  {
-    nivel: 3,
-    descripcion: "Riesgo medio",
-    porcentaje: "2.436%",
-    ejemplos: "Construcción ligera, manufactura no peligrosa, transporte terrestre."
-  },
-  {
-    nivel: 4,
-    descripcion: "Riesgo alto",
-    porcentaje: "4.350%",
-    ejemplos: "Construcción pesada, minería superficial, manejo de maquinaria pesada."
-  },
-  {
-    nivel: 5,
-    descripcion: "Riesgo máximo",
-    porcentaje: "6.960%",
-    ejemplos: "Trabajos en altura, espacios confinados, manipulación de sustancias químicas peligrosas, electricidad de alta tensión."
-  }
-];
 
 // Interfaces
 interface AuthData {
@@ -63,8 +29,7 @@ interface ContratoData {
   salario: number;
   estado: boolean;
   fecha_registro?: string;
-  centro_costos?: number; // Nuevo campo
-  nivel_arl?: number; // Nuevo campo
+  // Campos adicionales para mostrar en la tabla (provenientes de JOIN)
   primer_nombre?: string;
   segundo_nombre?: string;
   primer_apellido?: string;
@@ -155,9 +120,7 @@ const Contrato: React.FC = () => {
     fecha_inicio: new Date().toISOString().split('T')[0],
     fecha_fin: '',
     salario: 0,
-    estado: true,
-    centro_costos: undefined, 
-    nivel_arl: undefined 
+    estado: true
   });
   
   // Estado para catálogos
@@ -219,6 +182,7 @@ const Contrato: React.FC = () => {
     try {
       setLoadingCatalogos(true);
       
+      // Lista de catálogos a cargar (sin regímenes ni responsabilidades fiscales)
       const catalogos = [
         { action: 'leer_personas', setter: setPersonas, name: 'personas' },
         { action: 'leer_tipos_vinculacion', setter: setTiposVinculacion, name: 'tipos de vinculación' },
@@ -260,13 +224,10 @@ const Contrato: React.FC = () => {
   const handleTextFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     
-    // Manejo especial para campos numéricos
-    if (name === 'salario' || name === 'centro_costos') {
-      const numericValue = value.replace(/[^0-9]/g, ''); // Solo números
-      setFormData(prev => ({
-        ...prev,
-        [name]: numericValue ? parseInt(numericValue, 10) : null
-      }));
+    // Manejo especial para campo de salario (solo admitir números)
+    if (name === 'salario') {
+      const numericValue = value.replace(/[^0-9.]/g, '');
+      setFormData(prev => ({ ...prev, [name]: numericValue ? parseFloat(numericValue) : 0 }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -275,11 +236,9 @@ const Contrato: React.FC = () => {
   // Manejador para los Select
   const handleSelectChange = (e: SelectChangeEvent) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value === '' ? null : Number(value) // Permitir null para nivel_arl
-    }));
+    setFormData(prev => ({ ...prev, [name]: value === '' ? 0 : Number(value) }));
     
+    // Si se cambió el tipo de vinculación, ajustamos el tipo de contrato según corresponda
     if (name === 'id_tipo_vinculacion') {
       const tipoVinculacionId = Number(value);
       
@@ -368,9 +327,7 @@ const Contrato: React.FC = () => {
       fecha_inicio: new Date().toISOString().split('T')[0],
       fecha_fin: '',
       salario: 0,
-      estado: true,
-      centro_costos: undefined, 
-      nivel_arl: undefined 
+      estado: true
     });
     setDialogOpen(true);
   };
@@ -379,19 +336,17 @@ const Contrato: React.FC = () => {
   const handleOpenEditDialog = (contrato: ContratoData) => {
     setFormMode('editar');
     
-    const contratoParaFormulario: ContratoData = {
+    const contratoParaFormulario = {
       id: contrato.id,
-      id_persona: contrato.id_persona || 0,
+      id_persona: contrato.id_persona,
       id_tipo_vinculacion: contrato.id_tipo_vinculacion || 0,
-      id_cargo: contrato.id_cargo || 0,
+      id_cargo: contrato.id_cargo,
       jornada_laboral_id: contrato.jornada_laboral_id || 0,
-      id_tipo_contrato: contrato.id_tipo_contrato || 0,
+      id_tipo_contrato: contrato.id_tipo_contrato,
       fecha_inicio: contrato.fecha_inicio ? new Date(contrato.fecha_inicio).toISOString().split('T')[0] : '',
       fecha_fin: contrato.fecha_fin ? new Date(contrato.fecha_fin).toISOString().split('T')[0] : '',
-      salario: contrato.salario || 0,
-      estado: contrato.estado ?? true,
-      centro_costos: contrato.centro_costos, 
-      nivel_arl: contrato.nivel_arl 
+      salario: contrato.salario,
+      estado: contrato.estado
     };
     
     setFormData(contratoParaFormulario);
@@ -529,6 +484,7 @@ const Contrato: React.FC = () => {
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
         
+        {/* Barra de búsqueda */}
         <Box sx={{ mb: 3, display: 'flex' }}>
           <TextField
             fullWidth
@@ -542,6 +498,7 @@ const Contrato: React.FC = () => {
           />
         </Box>
         
+        {/* Pestañas para filtrar por estado */}
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
           <Tabs value={tabValue} onChange={handleTabChange}>
             <Tab label={`Todos (${contratosFiltrados.length})`} />
@@ -549,112 +506,99 @@ const Contrato: React.FC = () => {
             <Tab label={`Inactivos (${contratosInactivos.length})`} />
           </Tabs>
         </Box>
-
-
- {loading ? (
-  <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-    <CircularProgress />
-  </Box>
-) : (
-  <TableContainer component={Paper}>
-    <Table>
-      <TableHead>
-        <TableRow>
-          <TableCell>ID</TableCell><TableCell>Empleado</TableCell><TableCell>Cargo</TableCell><TableCell>Tipo Contrato</TableCell><TableCell>Fecha Inicio</TableCell><TableCell>Fecha Fin</TableCell><TableCell>Salario</TableCell><TableCell>Centro Costos</TableCell><TableCell>Nivel ARL</TableCell><TableCell>Estado</TableCell><TableCell>Acciones</TableCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {(tabValue === 0 ? contratosFiltrados : 
-          tabValue === 1 ? contratosActivos : contratosInactivos).length === 0 ? (
-          <TableRow><TableCell colSpan={11} align="center">No hay contratos registrados</TableCell></TableRow>
+        
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+            <CircularProgress />
+          </Box>
         ) : (
-          (tabValue === 0 ? contratosFiltrados : 
-           tabValue === 1 ? contratosActivos : contratosInactivos).map((contrato) => {
-            const fechaActual = new Date();
-            const fechaInicio = new Date(contrato.fecha_inicio);
-            const fechaFin = contrato.fecha_fin ? new Date(contrato.fecha_fin) : null;
-            
-            const contratoVigente = fechaInicio <= fechaActual && 
-                                  (!fechaFin || fechaFin >= fechaActual);
-            
-            return (
-              <TableRow key={contrato.id}>
-                <TableCell>{contrato.id}</TableCell>
-                <TableCell>
-                  {getNombreCompleto(contrato)}
-                  <Typography variant="caption" display="block" color="textSecondary">
-                    ID: {contrato.identificacion}
-                  </Typography>
-                </TableCell>
-                <TableCell>{contrato.cargo_nombre}</TableCell>
-                <TableCell>{contrato.tipo_contrato_nombre}</TableCell>
-                <TableCell>{formatearFecha(contrato.fecha_inicio)}</TableCell>
-                <TableCell>{contrato.fecha_fin ? formatearFecha(contrato.fecha_fin) : 'Indefinido'}</TableCell>
-                <TableCell>{formatearSalario(contrato.salario)}</TableCell>
-                <TableCell>{contrato.centro_costos || 'N/A'}</TableCell>
-                <TableCell>
-                  {contrato.nivel_arl ? (
-                    <Tooltip
-                      title={
-                        <Box>
-                          <Typography variant="body2">{nivelesARL[contrato.nivel_arl - 1].descripcion}</Typography>
-                          <Typography variant="caption">Porcentaje: {nivelesARL[contrato.nivel_arl - 1].porcentaje}</Typography>
-                          <Typography variant="caption" display="block">
-                            Ejemplos: {nivelesARL[contrato.nivel_arl - 1].ejemplos}
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>ID</TableCell>
+                  <TableCell>Empleado</TableCell>
+                  <TableCell>Cargo</TableCell>
+                  <TableCell>Tipo Contrato</TableCell>
+                  <TableCell>Fecha Inicio</TableCell>
+                  <TableCell>Fecha Fin</TableCell>
+                  <TableCell>Salario</TableCell>
+                  <TableCell>Estado</TableCell>
+                  <TableCell>Acciones</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(tabValue === 0 ? contratosFiltrados : 
+                  tabValue === 1 ? contratosActivos : contratosInactivos).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} align="center">No hay contratos registrados</TableCell>
+                  </TableRow>
+                ) : (
+                  (tabValue === 0 ? contratosFiltrados : 
+                   tabValue === 1 ? contratosActivos : contratosInactivos).map((contrato) => {
+                    const fechaActual = new Date();
+                    const fechaInicio = new Date(contrato.fecha_inicio);
+                    const fechaFin = contrato.fecha_fin ? new Date(contrato.fecha_fin) : null;
+                    
+                    const contratoVigente = fechaInicio <= fechaActual && 
+                                          (!fechaFin || fechaFin >= fechaActual);
+                    
+                    return (
+                      <TableRow key={contrato.id}>
+                        <TableCell>{contrato.id}</TableCell>
+                        <TableCell>
+                          {getNombreCompleto(contrato)}
+                          <Typography variant="caption" display="block" color="textSecondary">
+                            ID: {contrato.identificacion}
                           </Typography>
-                        </Box>
-                      }
-                    >
-                      <Chip
-                        label={`Nivel ${contrato.nivel_arl}`}
-                        size="small"
-                        color="info"
-                      />
-                    </Tooltip>
-                  ) : 'N/A'}
-                </TableCell>
-                <TableCell>
-                  <Chip 
-                    label={contrato.estado ? 'Activo' : 'Inactivo'} 
-                    color={contrato.estado ? 'success' : 'error'} 
-                    size="small" 
-                  />
-                  {contrato.estado && !contratoVigente && (
-                    <Chip 
-                      label="Fuera de periodo" 
-                      color="warning" 
-                      size="small" 
-                      sx={{ ml: 1 }}
-                    />
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Button 
-                    color="primary" 
-                    size="small" 
-                    startIcon={<EditIcon />}
-                    onClick={() => handleOpenEditDialog(contrato)}
-                    sx={{ mr: 1 }}
-                  >
-                    Editar
-                  </Button>
-                  <Button 
-                    color="error" 
-                    size="small" 
-                    startIcon={<DeleteIcon />}
-                    onClick={() => contrato.id && handleDeleteContrato(contrato.id)}
-                  >
-                    Eliminar
-                  </Button>
-                </TableCell>
-              </TableRow>
-            );
-          })
+                        </TableCell>
+                        <TableCell>{contrato.cargo_nombre}</TableCell>
+                        <TableCell>{contrato.tipo_contrato_nombre}</TableCell>
+                        <TableCell>{formatearFecha(contrato.fecha_inicio)}</TableCell>
+                        <TableCell>{contrato.fecha_fin ? formatearFecha(contrato.fecha_fin) : 'Indefinido'}</TableCell>
+                        <TableCell>{formatearSalario(contrato.salario)}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={contrato.estado ? 'Activo' : 'Inactivo'} 
+                            color={contrato.estado ? 'success' : 'error'} 
+                            size="small" 
+                          />
+                          {contrato.estado && !contratoVigente && (
+                            <Chip 
+                              label="Fuera de periodo" 
+                              color="warning" 
+                              size="small" 
+                              sx={{ ml: 1 }}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Button 
+                            color="primary" 
+                            size="small" 
+                            startIcon={<EditIcon />}
+                            onClick={() => handleOpenEditDialog(contrato)}
+                            sx={{ mr: 1 }}
+                          >
+                            Editar
+                          </Button>
+                          <Button 
+                            color="error" 
+                            size="small" 
+                            startIcon={<DeleteIcon />}
+                            onClick={() => contrato.id && handleDeleteContrato(contrato.id)}
+                          >
+                            Eliminar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
-      </TableBody>
-    </Table>
-  </TableContainer>
-)}
       </Box>
       
       {/* Diálogo para crear/editar contrato */}
@@ -831,51 +775,6 @@ const Contrato: React.FC = () => {
                     tipo.nombre.toLowerCase().includes('indefinido')
                   )}
                 />
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="Centro de Costos (opcional)"
-                  name="centro_costos"
-                  type="text"
-                  value={formData.centro_costos || ''}
-                  onChange={handleTextFieldChange}
-                  fullWidth
-                  variant="outlined"
-                  inputProps={{ maxLength: 4 }} // Máximo 4 dígitos
-                  helperText="Código numérico de hasta 4 dígitos"
-                />
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Nivel ARL (opcional)</InputLabel>
-                  <Select
-                    name="nivel_arl"
-                    value={String(formData.nivel_arl || '')}
-                    onChange={handleSelectChange}
-                    label="Nivel ARL (opcional)"
-                  >
-                    <MenuItem value=""><em>Seleccione</em></MenuItem>
-                    {nivelesARL.map(nivel => (
-                      <MenuItem key={nivel.nivel} value={String(nivel.nivel)}>
-                        <Tooltip
-                          title={
-                            <Box>
-                              <Typography variant="body2">{nivel.descripcion}</Typography>
-                              <Typography variant="caption">Porcentaje: {nivel.porcentaje}</Typography>
-                              <Typography variant="caption" display="block">
-                                Ejemplos: {nivel.ejemplos}
-                              </Typography>
-                            </Box>
-                          }
-                        >
-                          <Typography>Nivel {nivel.nivel} - {nivel.descripcion}</Typography>
-                        </Tooltip>
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
               </Grid>
               
               <Grid item xs={12} md={6}>
